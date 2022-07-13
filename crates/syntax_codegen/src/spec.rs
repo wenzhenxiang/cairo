@@ -87,6 +87,7 @@ pub fn get_spec() -> Vec<Node> {
             "ExprMissing",
             vec!["ExprPath", "ExprLiteral", "ExprParenthesized", "ExprUnary", "ExprBinary"],
         ),
+        StructBuilder::new("ExprMissing").build(),
         separated_list_node("ExprPath", "PathSegment"),
         StructBuilder::new("PathSegment")
             .node("ident", "Identifier")
@@ -106,7 +107,105 @@ pub fn get_spec() -> Vec<Node> {
             .node("op", "Terminal")
             .node("right", "Expr")
             .build(),
-        StructBuilder::new("ExprMissing").build(),
+        StructBuilder::new("ExprBlock")
+            .node("left", "Terminal")
+            .node("statements", "StatementList")
+            .node("right", "Terminal")
+            .build(),
+        // Statements.
+        separated_list_node("StatementList", "Statement"),
+        enum_node(
+            "Statement",
+            "StatementMissing",
+            vec!["StatementLet", "StatementExpr", "StatementReturn"],
+        ),
+        StructBuilder::new("StatementMissing").build(),
+        StructBuilder::new("StatementLet")
+            .node("letkw", "Terminal")
+            .node("lhs", "Identifier")
+            .node("eq", "Terminal")
+            .node("rhs", "Expr")
+            .build(),
+        StructBuilder::new("StatementExpr").node("expr", "Expr").build(),
+        StructBuilder::new("StatementReturn")
+            .node("returnkw", "Terminal")
+            .node("expr", "Expr")
+            .build(),
+        // Items.
+        separated_list_node("ItemList", "Item"),
+        enum_node(
+            "Item",
+            "Empty",
+            vec!["ItemModule", "ItemFunction", "ItemTrait", "ItemImpl", "ItemStruct", "ItemEnum"],
+        ),
+        StructBuilder::new("ItemModule")
+            .node("modkw", "Terminal")
+            .node("name", "Identifier")
+            .node("semi", "Terminal")
+            .build(),
+        StructBuilder::new("Semi").node("token", "Terminal").build(),
+        enum_node("FuncBody", "Semi", vec!["ExprBlock"]),
+        StructBuilder::new("ItemFunction")
+            .node("funckw", "Terminal")
+            .node("name", "Identifier")
+            .node("lparen", "Terminal")
+            .node("arguments", "ArgumentList")
+            .node("rparen", "Terminal")
+            .node("arrow", "Terminal")
+            .node("ret_ty", "Expr")
+            .node("body", "FuncBody")
+            .build(),
+        separated_list_node("ArgumentList", "Argument"),
+        StructBuilder::new("Argument")
+            .node("name", "Identifier")
+            .node("colon", "Terminal")
+            .node("ty", "Expr")
+            .build(),
+        StructBuilder::new("ItemTrait")
+            .node("kwtrait", "Terminal")
+            .node("name", "Identifier")
+            .node("left", "Terminal")
+            .node("items", "ItemList")
+            .node("right", "Terminal")
+            .build(),
+        StructBuilder::new("ItemImpl")
+            .node("kwimpl", "Terminal")
+            .node("name", "Identifier")
+            .node("of", "Terminal")
+            .node("kwtrait", "Identifier")
+            .node("kwfor", "Terminal")
+            .node("ty", "Identifier")
+            .node("left", "Terminal")
+            .node("items", "ItemList")
+            .node("right", "Terminal")
+            .build(),
+        StructBuilder::new("ItemStruct")
+            .node("kwstruct", "Terminal")
+            .node("name", "Identifier")
+            .node("left", "Terminal")
+            .node("items", "MemberList")
+            .node("right", "Terminal")
+            .build(),
+        separated_list_node("MemberList", "Member"),
+        StructBuilder::new("Member")
+            .node("name", "Identifier")
+            .node("colon", "Terminal")
+            .node("ty", "Expr")
+            .build(),
+        StructBuilder::new("ItemEnum")
+            .node("kwenum", "Terminal")
+            .node("name", "Identifier")
+            .node("left", "Terminal")
+            .node("variants", "VariantList")
+            .node("right", "Terminal")
+            .build(),
+        separated_list_node("VariantList", "Variant"),
+        StructBuilder::new("Variant").node("ty", "Expr").build(),
+        // Meta.
+        StructBuilder::new("CompilationUnit")
+            .node("items", "ItemList")
+            .node("eof", "Terminal")
+            .build(),
     ];
 
     nodes

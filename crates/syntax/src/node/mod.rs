@@ -6,6 +6,7 @@ use crate::token::{Token, TokenKind};
 
 use self::kind::SyntaxKind;
 
+#[allow(clippy::too_many_arguments)]
 #[allow(dead_code)]
 #[allow(unused_variables)]
 pub mod ast;
