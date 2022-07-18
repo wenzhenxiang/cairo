@@ -1,7 +1,9 @@
 use syntax::{
     node::{
         ast::{Terminal, Trivia, TriviumSingleLineComment, TriviumWhitespace},
-        GreenDatabase, GreenId, SyntaxNode, SyntaxToken, TypedSyntaxNode,
+        db::GreenDatabase,
+        ids::GreenId,
+        SyntaxNode, SyntaxToken, TypedSyntaxNode,
     },
     token::TokenKind,
 };

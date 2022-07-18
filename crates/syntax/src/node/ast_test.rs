@@ -1,14 +1,13 @@
 use super::ast::{
     ExprBinary, ExprLiteral, ExprPath, Identifier, PathSegment, Terminal, Trivia, TriviumWhitespace,
 };
+use super::db::GreenDatabase;
 use super::kind::SyntaxKind;
 use super::{ast::Empty, GreenInterner, SyntaxNode, SyntaxNodeKind};
 use crate::{
     node::SyntaxToken,
     token::{Token, TokenKind},
 };
-
-use super::GreenDatabase;
 
 #[salsa::database(GreenDatabase)]
 #[derive(Default)]

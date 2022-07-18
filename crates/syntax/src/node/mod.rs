@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use core::hash::Hash;
+use std::{ops::Deref, sync::Arc};
 
 use smol_str::SmolStr;
 
 use crate::token::{Token, TokenKind};
 
-use self::kind::SyntaxKind;
+use self::{db::GreenInterner, green::GreenNode, ids::GreenId, kind::SyntaxKind};
 
 #[allow(clippy::too_many_arguments)]
 #[allow(dead_code)]
@@ -12,48 +13,13 @@ use self::kind::SyntaxKind;
 pub mod ast;
 #[cfg(test)]
 mod ast_test;
+pub mod db;
 pub mod element_list;
+pub mod green;
+pub mod ids;
 pub mod kind;
 
-// Salsa database interface.
-#[salsa::query_group(GreenDatabase)]
-pub trait GreenInterner {
-    #[salsa::interned]
-    fn intern_green(&self, field: GreenNode) -> GreenId;
-}
-
-// Green node. Underlying untyped representation of the syntax tree.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct GreenInternalNode {
-    kind: SyntaxKind,
-    children: Vec<GreenId>,
-    width: u32,
-}
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum GreenNode {
-    Internal(GreenInternalNode),
-    Token(Token),
-}
-impl GreenNode {
-    fn width(&self) -> u32 {
-        match self {
-            GreenNode::Internal(internal) => internal.width,
-            GreenNode::Token(token) => token.width(),
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
-pub struct GreenId(salsa::InternId);
-impl salsa::InternKey for GreenId {
-    fn from_intern_id(id: salsa::InternId) -> Self {
-        Self(id)
-    }
-
-    fn as_intern_id(&self) -> salsa::InternId {
-        self.0
-    }
-}
+// TODO: Children should be excluded fomr Eq and Hash of Typed nodes.
 
 // SyntaxNode. Untyped view of the syntax tree. Adds parent() and offset() capabilities.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

@@ -1,5 +1,5 @@
 [package]
-name = "parser"
+name = "defs"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 diagnostics = { path = "../diagnostics" }
 filesystem = { path = "../filesystem" }
+parser = { path = "../parser" }
 salsa = "0.16.1"
 smol_str = "0.1.23"
 syntax = { path = "../syntax" }

@@ -183,7 +183,7 @@ pub fn get_spec() -> Vec<Node> {
             .node("kwstruct", "Terminal")
             .node("name", "Identifier")
             .node("left", "Terminal")
-            .node("items", "MemberList")
+            .node("members", "MemberList")
             .node("right", "Terminal")
             .build(),
         separated_list_node("MemberList", "Member"),
@@ -202,10 +202,7 @@ pub fn get_spec() -> Vec<Node> {
         separated_list_node("VariantList", "Variant"),
         StructBuilder::new("Variant").node("ty", "Expr").build(),
         // Meta.
-        StructBuilder::new("CompilationUnit")
-            .node("items", "ItemList")
-            .node("eof", "Terminal")
-            .build(),
+        StructBuilder::new("SyntaxFile").node("items", "ItemList").node("eof", "Terminal").build(),
     ];
 
     nodes

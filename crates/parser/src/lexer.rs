@@ -3,7 +3,9 @@ use smol_str::SmolStr;
 use syntax::{
     node::{
         ast::{Terminal, Trivia, TriviumNewline, TriviumSingleLineComment, TriviumWhitespace},
-        GreenId, GreenInterner, SyntaxToken,
+        db::GreenInterner,
+        ids::GreenId,
+        SyntaxToken,
     },
     token::TokenKind,
 };

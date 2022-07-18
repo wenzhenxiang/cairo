@@ -72,7 +72,8 @@ fn generate_ast_code() -> rust::Tokens {
 
         use super::kind::SyntaxKind;
         use super::element_list::ElementList;
-        use super::{TypedSyntaxNode, GreenId, GreenInterner, GreenInternalNode, GreenNode, SyntaxNode, SyntaxToken};
+        use super::green::GreenInternalNode;
+        use super::{TypedSyntaxNode, GreenId, GreenInterner, GreenNode, SyntaxNode, SyntaxToken};
     };
     for Node { name, kind } in spec.into_iter() {
         tokens.extend(match kind {
@@ -89,6 +90,7 @@ fn generate_ast_code() -> rust::Tokens {
 
 fn gen_list_code(name: String, element_type: String, step: usize) -> Tokens<Rust> {
     quote! {
+        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
         pub struct $(&name)(ElementList<$(&element_type),$step>);
         impl Deref for $(&name){
             type Target = ElementList<$(&element_type),$step>;
@@ -136,6 +138,7 @@ pub fn reformat(text: String) -> String {
 
 fn gen_enum_code(name: String, variants: Vec<String>, missing_variant: String) -> rust::Tokens {
     quote! {
+        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
         pub enum $(&name){
             $(for v in &variants => $v($v),)
         }
@@ -192,6 +195,7 @@ fn gen_struct_code(name: String, members: Vec<Member>) -> rust::Tokens {
         };
     }
     quote! {
+        #[derive(Clone, Debug, Eq, Hash, PartialEq)]
         pub struct $(&name){
             node: SyntaxNode,
             children: Vec<SyntaxNode>,

@@ -7,6 +7,7 @@ use super::GreenInterner;
 // A typed view of an element list node.
 // STEP=1 means a sequence of elements (e.g. sequence of trivia elements).
 // STEP=2 means a separated sequence (e.g. argument list separated by `,`).
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ElementList<T: TypedSyntaxNode, const STEP: usize> {
     node: SyntaxNode,
     phantom: PhantomData<T>,

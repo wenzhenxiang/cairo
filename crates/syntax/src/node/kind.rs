@@ -36,5 +36,5 @@ pub enum SyntaxKind {
     ItemEnum,
     VariantList,
     Variant,
-    CompilationUnit,
+    SyntaxFile,
 }
