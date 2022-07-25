@@ -1,12 +1,12 @@
 use db_utils::define_short_id;
-use defs::ids::{ExternFunctionId, ExternTypeId, FreeFunctionId, GenericTypeArgId};
+use defs::ids::{ExternFunctionId, ExternTypeId, FreeFunctionId, StructId};
 
 // Ids in this file represent semantic representations.
 
 // Generics.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum GenericValueId {
-    Type(TypeInstanceId),
+    Type(TypeId),
     // TODO(spapini): impls and constants as generic values.
 }
 
@@ -17,27 +17,30 @@ pub struct FunctionInstanceLongId {
     kind: FunctionInstanceKind,
     generic_values: Vec<GenericValueId>,
 }
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum FunctionInstanceKind {
-    Top(FreeFunctionId),
-    // TODO(spapini): impl functions.
+    Free(FreeFunctionId),
+    // TODO(spapini): impl functions and function pointers.
     Extern(ExternFunctionId),
 }
 define_short_id!(FunctionInstanceId);
 
 // Type instance.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum TypeDefId {
-    Generic(GenericTypeArgId),
+pub enum GenericType {
+    Struct(StructId),
     External(ExternTypeId),
-    // TODO(spapini): structs, enums, associated types in impls.
+    // TODO(spapini): enums, associated types in impls.
 }
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub enum TypeInstanceLongId {
-    TypeDef(TypeDefId, Vec<GenericValueId>),
+pub enum Type {
+    Concrete(GenericType, Vec<GenericValueId>),
+    // TODO(spapini): tuple, generic type parameters.
     Missing,
 }
-define_short_id!(TypeInstanceId);
+define_short_id!(TypeId);
 
 // CodeElements.
 define_short_id!(ExprId);
