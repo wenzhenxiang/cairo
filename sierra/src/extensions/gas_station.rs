@@ -21,23 +21,31 @@ impl ExtensionImplementation for GetGasExtension {
         })
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
         _cursors: &Cursors,
         arg_refs: Vec<RefValue>,
-    ) -> Result<Vec<(Effects, Vec<RefValue>)>, Error> {
-        let gas = single_value_arg(tmpl_args)?;
-        if gas <= 0 {
-            return Err(Error::UnsupportedTypeArg);
-        }
+    ) -> Result<Vec<Vec<RefValue>>, Error> {
         Ok(vec![
-            (
-                gas_usage(-gas + 1),
-                vec![RefValue::OpWithConst(as_final(&arg_refs[0])?, Op::Sub, gas)],
-            ),
-            (gas_usage(1), vec![arg_refs[0].clone()]),
+            vec![RefValue::OpWithConst(
+                as_final(&arg_refs[0])?,
+                Op::Sub,
+                gas_value_arg(tmpl_args)?,
+            )],
+            vec![arg_refs[0].clone()],
+        ])
+    }
+
+    fn effects(
+        self: &Self,
+        tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Vec<Effects>, Error> {
+        Ok(vec![
+            gas_usage(-gas_value_arg(tmpl_args)? + 1),
+            gas_usage(1),
         ])
     }
 
@@ -47,7 +55,7 @@ impl ExtensionImplementation for GetGasExtension {
         _registry: &TypeRegistry,
         mut inputs: Vec<Vec<i64>>,
     ) -> Result<(Vec<Vec<i64>>, usize), Error> {
-        let gas = single_value_arg(tmpl_args)?;
+        let gas = gas_value_arg(tmpl_args)?;
         validate_mem_sizes(&inputs, [1])?;
         if inputs[0][0] >= gas {
             Ok((vec![vec![inputs[0][0] - gas]], 0))
@@ -71,18 +79,26 @@ impl NonBranchImplementation for RefundGasExtension {
         ))
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
         _cursors: &Cursors,
         arg_refs: Vec<RefValue>,
-    ) -> Result<(Effects, Vec<RefValue>), Error> {
-        let gas = single_value_arg(tmpl_args)?;
-        Ok((
-            gas_usage(gas),
-            vec![RefValue::OpWithConst(as_final(&arg_refs[0])?, Op::Add, gas)],
-        ))
+    ) -> Result<Vec<RefValue>, Error> {
+        Ok(vec![RefValue::OpWithConst(
+            as_final(&arg_refs[0])?,
+            Op::Add,
+            gas_value_arg(tmpl_args)?,
+        )])
+    }
+
+    fn effects(
+        self: &Self,
+        tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Effects, Error> {
+        Ok(gas_usage(gas_value_arg(tmpl_args)?))
     }
 
     fn exec(
@@ -92,7 +108,16 @@ impl NonBranchImplementation for RefundGasExtension {
         inputs: Vec<Vec<i64>>,
     ) -> Result<Vec<Vec<i64>>, Error> {
         validate_mem_sizes(&inputs, [1])?;
-        Ok(vec![vec![inputs[0][0] + single_value_arg(tmpl_args)?]])
+        Ok(vec![vec![inputs[0][0] + gas_value_arg(tmpl_args)?]])
+    }
+}
+
+fn gas_value_arg(tmpl_args: &Vec<TemplateArg>) -> Result<i64, Error> {
+    let gas = single_value_arg(tmpl_args)?;
+    if gas <= 0 {
+        Err(Error::UnsupportedTypeArg)
+    } else {
+        Ok(gas)
     }
 }
 

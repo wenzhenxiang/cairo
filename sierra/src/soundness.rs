@@ -15,19 +15,11 @@ pub fn validate(prog: &Program) -> Result<(), Error> {
         prog: prog,
         reg: Registry::new(prog),
     };
-    let mut visited = vec![false; prog.blocks.len()];
     let mut block_basic_infos = vec![None; prog.blocks.len()];
     for f in &prog.funcs {
-        h.calc_basic_info(
-            f.entry,
-            h.func_start_vars(f)?,
-            Cursors { local: 0, temp: 0 },
-            &f.res_types,
-            &mut visited,
-            &mut block_basic_infos,
-        )?;
+        h.calc_basic_info(f.entry, h.func_block_basic_info(f)?, &mut block_basic_infos)?;
     }
-    let block_future_effects = h.calc_block_future_effects(&block_basic_infos)?;
+    let block_future_effects = h.calc_block_future_effects()?;
     h.validate(block_basic_infos, block_future_effects)
 }
 
@@ -44,7 +36,6 @@ struct BlockBasicInfo<'a> {
     start_vars: VarStates,
     start_cursors: Cursors,
     res_types: &'a Vec<Type>,
-    next_effects: NextEffects,
 }
 
 struct Helper<'a> {
@@ -52,13 +43,11 @@ struct Helper<'a> {
     pub reg: Registry,
 }
 
-enum FollowingInfo {
-    Blocks(Vec<(BlockId, VarStates, Cursors, Effects)>),
-    Return(Effects),
-}
-
 impl Helper<'_> {
-    fn func_start_vars<'a>(self: &Self, f: &'a Function) -> Result<VarStates, Error> {
+    fn func_block_basic_info<'a>(
+        self: &Self,
+        f: &'a Function,
+    ) -> Result<BlockBasicInfo<'a>, Error> {
         let mut last = -2;
         let mut vars = VarStates::new();
         f.args.iter().try_for_each(|v| {
@@ -80,18 +69,63 @@ impl Helper<'_> {
             );
             Ok(())
         })?;
-        Ok(vars)
+        Ok(BlockBasicInfo {
+            start_vars: vars,
+            start_cursors: Cursors { local: 0, temp: 0 },
+            res_types: &f.res_types,
+        })
+    }
+
+    fn get_next_effects(self: &Self, block_id: BlockId) -> Result<NextEffects, Error> {
+        let block = &self.prog.blocks[block_id.0];
+        let mut effects = Effects::none();
+        for invc in &block.invocations {
+            let mut ext_effects = self
+                .reg
+                .effects(&invc.ext)
+                .map_err(|e| Error::Extension(e, invc.to_string()))?;
+            if ext_effects.len() != 1 {
+                return Err(Error::ExtensionBranchesMismatch(invc.to_string()));
+            }
+            effects = effects
+                .add(&ext_effects.remove(0))
+                .map_err(|e| Error::Extension(ExtError::EffectsAdd(e), invc.to_string()))?;
+        }
+        match &block.exit {
+            BlockExit::Return(_) => Ok(NextEffects::Return(effects)),
+            BlockExit::Jump(j) => {
+                let ext_effects = self
+                    .reg
+                    .effects(&j.ext)
+                    .map_err(|e| Error::Extension(e, j.to_string()))?;
+                if ext_effects.len() != j.branches.len() {
+                    return Err(Error::ExtensionBranchesMismatch(j.to_string()));
+                }
+                let mut next_effects = vec![];
+                for (branch, e) in izip!(j.branches.iter(), ext_effects.into_iter()) {
+                    next_effects.push((
+                        branch_block(block_id, branch),
+                        effects.add(&e).map_err(|e| {
+                            Error::Extension(ExtError::EffectsAdd(e), j.to_string())
+                        })?,
+                    ));
+                }
+                Ok(NextEffects::Continue(next_effects))
+            }
+        }
     }
 
     fn get_following_info<'a>(
         self: &Self,
         block_id: BlockId,
-        mut vars: VarStates,
-        mut cursors: Cursors,
-        res_types: &'a Vec<Type>,
-    ) -> Result<FollowingInfo, Error> {
+        bi: BlockBasicInfo<'a>,
+    ) -> Result<Vec<(BlockId, VarStates, Cursors)>, Error> {
+        let BlockBasicInfo {
+            start_vars: mut vars,
+            start_cursors: mut cursors,
+            res_types,
+        } = bi;
         let block = &self.prog.blocks[block_id.0];
-        let mut block_effects = Effects::none();
         for invc in &block.invocations {
             let (nvars, args_info) =
                 take_args(vars, invc.args.iter()).map_err(|e| Error::EditState(block_id, e))?;
@@ -102,11 +136,8 @@ impl Helper<'_> {
             if effects.len() != 1 {
                 return Err(Error::ExtensionBranchesMismatch(invc.to_string()));
             }
-            match fallthrough {
-                Some(0) => {}
-                _ => {
-                    return Err(Error::ExtensionFallthroughMismatch(invc.to_string()));
-                }
+            if fallthrough != Some(0) {
+                return Err(Error::ExtensionFallthroughMismatch(invc.to_string()));
             }
             let ExtensionEffects {
                 vars: results_info,
@@ -115,9 +146,6 @@ impl Helper<'_> {
             if results_info.len() != invc.results.len() {
                 return Err(Error::ExtensionResultSizeMismatch(invc.to_string()));
             }
-            block_effects = block_effects
-                .add(&effects)
-                .map_err(|e| Error::Extension(ExtError::EffectsAdd(e), invc.to_string()))?;
             cursors = normalize_cursors(&nvars, &effects, cursors)?;
             vars = put_results(nvars, izip!(invc.results.iter(), results_info.into_iter()))
                 .map_err(|e| Error::EditState(block_id, e))?;
@@ -167,7 +195,7 @@ impl Helper<'_> {
                         vars.into_keys().collect(),
                     ))
                 } else {
-                    Ok(FollowingInfo::Return(block_effects))
+                    Ok(vec![])
                 }
             }
             BlockExit::Jump(j) => {
@@ -180,11 +208,10 @@ impl Helper<'_> {
                 if states.len() != j.branches.len() {
                     return Err(Error::ExtensionBranchesMismatch(j.to_string()));
                 }
-                match fallthrough {
-                    Some(i) if j.branches[i].target != BranchTarget::Fallthrough => {
+                if let Some(i) = fallthrough {
+                    if j.branches[i].target != BranchTarget::Fallthrough {
                         return Err(Error::ExtensionFallthroughMismatch(j.to_string()));
                     }
-                    _ => {}
                 }
                 let mut next_states = vec![];
                 for (
@@ -206,19 +233,9 @@ impl Helper<'_> {
                         .map_err(|e| Error::EditState(block_id, e))?,
                         normalize_cursors(&vars, &effects, cursors.clone())?,
                     );
-                    next_states.push((
-                        match branch.target {
-                            BranchTarget::Fallthrough => BlockId(block_id.0 + 1),
-                            BranchTarget::Block(b) => b,
-                        },
-                        vars,
-                        cursors,
-                        block_effects.add(&effects).map_err(|e| {
-                            Error::Extension(ExtError::EffectsAdd(e), j.to_string())
-                        })?,
-                    ))
+                    next_states.push((branch_block(block_id, branch), vars, cursors))
                 }
-                Ok(FollowingInfo::Blocks(next_states))
+                Ok(next_states)
             }
         }
     }
@@ -226,35 +243,29 @@ impl Helper<'_> {
     fn calc_basic_info<'a>(
         self: &Self,
         block_id: BlockId,
-        vars: VarStates,
-        cursors: Cursors,
-        res_types: &'a Vec<Type>,
-        visited: &mut Vec<bool>,
+        bi: BlockBasicInfo<'a>,
         results: &mut Vec<Option<BlockBasicInfo<'a>>>,
     ) -> Result<(), Error> {
         if block_id.0 >= results.len() {
             return Err(Error::FunctionBlockOutOfBounds);
         }
-        if visited[block_id.0] {
+        let r = &mut results[block_id.0];
+        if r.is_some() {
             return Ok(());
         }
-        visited[block_id.0] = true;
-        results[block_id.0] = Some(BlockBasicInfo {
-            start_vars: vars.clone(),
-            start_cursors: cursors.clone(),
-            res_types: res_types,
-            next_effects: match self.get_following_info(block_id, vars, cursors, res_types)? {
-                FollowingInfo::Return(effects) => Ok(NextEffects::Return(effects)),
-                FollowingInfo::Blocks(nexts) => {
-                    let mut options = vec![];
-                    for (next_id, vars, cursors, effects) in nexts {
-                        self.calc_basic_info(next_id, vars, cursors, res_types, visited, results)?;
-                        options.push((next_id.clone(), effects));
-                    }
-                    Ok(NextEffects::Continue(options))
-                }
-            }?,
-        });
+        *r = Some(bi.clone());
+        let rt = bi.res_types;
+        for (next_id, vars, cursors) in self.get_following_info(block_id, bi)? {
+            self.calc_basic_info(
+                next_id,
+                BlockBasicInfo {
+                    start_vars: vars,
+                    start_cursors: cursors,
+                    res_types: rt,
+                },
+                results,
+            )?;
+        }
         Ok(())
     }
 
@@ -263,7 +274,7 @@ impl Helper<'_> {
         let mut rev_graph = vec![vec![]; self.prog.blocks.len()];
         let mut ret_blocks = vec![];
         for b in 0..self.prog.blocks.len() {
-            self.rec_build_rev_graph(b, &mut visited, &mut rev_graph, &mut ret_blocks);
+            self.rec_build_rev_graph(BlockId(b), &mut visited, &mut rev_graph, &mut ret_blocks);
         }
         let mut visited = vec![false; self.prog.blocks.len()];
         let mut order = vec![];
@@ -275,31 +286,24 @@ impl Helper<'_> {
 
     fn rec_build_rev_graph(
         self: &Self,
-        b: usize,
+        b: BlockId,
         visited: &mut Vec<bool>,
         rev_graph: &mut Vec<Vec<BlockId>>,
         ret_blocks: &mut Vec<BlockId>,
     ) {
-        if visited[b] {
+        if visited[b.0] {
             return;
         }
-        visited[b] = true;
-        match &self.prog.blocks[b].exit {
+        visited[b.0] = true;
+        match &self.prog.blocks[b.0].exit {
             BlockExit::Return(_) => {
-                ret_blocks.push(BlockId(b));
+                ret_blocks.push(b);
             }
             BlockExit::Jump(j) => {
                 for br in &j.branches {
-                    match &br.target {
-                        BranchTarget::Fallthrough => {
-                            rev_graph[b + 1].push(BlockId(b));
-                            self.rec_build_rev_graph(b + 1, visited, rev_graph, ret_blocks);
-                        }
-                        BranchTarget::Block(n) => {
-                            rev_graph[n.0].push(BlockId(b));
-                            self.rec_build_rev_graph(n.0, visited, rev_graph, ret_blocks);
-                        }
-                    }
+                    let n = branch_block(b, br);
+                    rev_graph[n.0].push(b);
+                    self.rec_build_rev_graph(n, visited, rev_graph, ret_blocks);
                 }
             }
         }
@@ -322,91 +326,19 @@ impl Helper<'_> {
         }
     }
 
-    // Function can only be called in reverse topological order - since some next stage must exist.
-    fn calc_block_future_effects_for_blocks<'a>(
+    fn merged_block_effects(
         self: &Self,
-        bis: &Vec<Option<BlockBasicInfo<'a>>>,
-        ordered_blocks: &Vec<BlockId>,
-        all_effects: &mut Vec<Option<Effects>>,
-    ) -> Result<(), Error> {
-        for b in ordered_blocks {
-            if b.0 >= bis.len() {
-                return Err(Error::FunctionBlockOutOfBounds);
-            }
-            let bi = bis[b.0]
-                .as_ref()
-                .ok_or_else(|| Error::UnusedBlock(b.clone()))?;
-            let effects = match &bi.next_effects {
-                NextEffects::Return(block_effects) => block_effects.clone(),
-                NextEffects::Continue(nexts) => {
-                    let mut merged_effects: Option<Effects> = None;
-                    for (n_id, block_effects) in nexts {
-                        match &all_effects[n_id.0] {
-                            None => {}
-                            Some(future_effects) => {
-                                let effects = block_effects
-                                    .add(future_effects)
-                                    .map_err(|e| Error::EffectsAdd(*b, e))?;
-                                merged_effects = Some(match merged_effects {
-                                    None => effects,
-                                    Some(prev) => prev
-                                        .converge(&effects)
-                                        .map_err(|e| Error::EffectsConverge(*b, e))?,
-                                })
-                            }
-                        }
-                    }
-                    merged_effects.unwrap()
-                }
-            };
-            all_effects[b.0] = Some(effects);
-        }
-        Ok(())
-    }
-
-    fn calc_block_future_effects<'a>(
-        self: &Self,
-        bis: &Vec<Option<BlockBasicInfo<'a>>>,
-    ) -> Result<Vec<Option<Effects>>, Error> {
-        let mut all_effects = vec![None; self.prog.blocks.len()];
-        let ordering = self.reverse_topological_ordering();
-        // First iteration - making sure all blocks has some calculation.
-        self.calc_block_future_effects_for_blocks(bis, &ordering, &mut all_effects)?;
-        // Second iteration - now actually calculating the correct values for cycles.
-        self.calc_block_future_effects_for_blocks(bis, &ordering, &mut all_effects)?;
-        Ok(all_effects)
-    }
-
-    fn validate<'a>(
-        self: &Self,
-        bis: Vec<Option<BlockBasicInfo<'a>>>,
-        all_effects: Vec<Option<Effects>>,
-    ) -> Result<(), Error> {
-        for (b, bi, future_effect) in izip!((0..).map(|b| BlockId(b)), &bis, &all_effects) {
-            let bi = bi.as_ref().ok_or_else(|| Error::UnusedBlock(b.clone()))?;
-            let future_effect = future_effect
-                .as_ref()
-                .ok_or_else(|| Error::UnusedBlock(b.clone()))?;
-            let found_effect = match self.get_following_info(
-                b,
-                bi.start_vars.clone(),
-                bi.start_cursors.clone(),
-                bi.res_types,
-            )? {
-                FollowingInfo::Return(effects) => Ok(effects),
-                FollowingInfo::Blocks(nexts) => {
-                    let mut merged_effects: Option<Effects> = None;
-                    for (n_id, vars, cursors, effects) in nexts {
-                        let nbi = bis[n_id.0]
-                            .as_ref()
-                            .ok_or_else(|| Error::UnusedBlock(b.clone()))?;
-                        validate_vars_eq(n_id, &nbi.start_vars, &vars)?;
-                        validate_ctxt_eq(n_id, &nbi.start_cursors, &cursors)?;
-                        let nfuture_effect = all_effects[n_id.0]
-                            .as_ref()
-                            .ok_or_else(|| Error::UnusedBlock(b.clone()))?;
-                        let effects = effects
-                            .add(nfuture_effect)
+        b: BlockId,
+        all_effects: &Vec<Option<Effects>>,
+    ) -> Result<Effects, Error> {
+        Ok(match self.get_next_effects(b)? {
+            NextEffects::Return(block_effects) => block_effects.clone(),
+            NextEffects::Continue(nexts) => {
+                let mut merged_effects: Option<Effects> = None;
+                for (n_id, block_effects) in nexts {
+                    if let Some(future_effects) = &all_effects[n_id.0] {
+                        let effects = block_effects
+                            .add(future_effects)
                             .map_err(|e| Error::EffectsAdd(b, e))?;
                         merged_effects = Some(match merged_effects {
                             None => effects,
@@ -415,9 +347,72 @@ impl Helper<'_> {
                                 .map_err(|e| Error::EffectsConverge(b, e))?,
                         });
                     }
-                    Ok(merged_effects.unwrap())
                 }
-            }?;
+                merged_effects.unwrap()
+            }
+        })
+    }
+
+    // Function can only be called in reverse topological order - since some next stage must exist.
+    fn calc_block_future_effects_for_blocks(
+        self: &Self,
+        ordered_blocks: &Vec<BlockId>,
+        all_effects: &mut Vec<Option<Effects>>,
+    ) -> Result<(), Error> {
+        for b in ordered_blocks {
+            if b.0 >= all_effects.len() {
+                return Err(Error::FunctionBlockOutOfBounds);
+            }
+            let effects = self.merged_block_effects(*b, all_effects)?;
+            all_effects[b.0] = Some(effects);
+        }
+        Ok(())
+    }
+
+    fn calc_block_future_effects<'a>(self: &Self) -> Result<Vec<Option<Effects>>, Error> {
+        let mut all_effects = vec![None; self.prog.blocks.len()];
+        let ordering = self.reverse_topological_ordering();
+        // First iteration - making sure all blocks has some calculation.
+        self.calc_block_future_effects_for_blocks(&ordering, &mut all_effects)?;
+        // Second iteration - now actually calculating the correct values for cycles.
+        self.calc_block_future_effects_for_blocks(&ordering, &mut all_effects)?;
+        Ok(all_effects)
+    }
+
+    fn validate<'a>(
+        self: &Self,
+        bis: Vec<Option<BlockBasicInfo<'a>>>,
+        all_effects: Vec<Option<Effects>>,
+    ) -> Result<(), Error> {
+        self.validate_block_info(&bis, &all_effects)?;
+        self.validate_function_descriptors(&bis, &all_effects)
+    }
+
+    fn validate_block_info<'a>(
+        self: &Self,
+        bis: &Vec<Option<BlockBasicInfo<'a>>>,
+        all_effects: &Vec<Option<Effects>>,
+    ) -> Result<(), Error> {
+        for (b, bi, future_effect) in izip!((0..).map(|b| BlockId(b)), bis, all_effects) {
+            let bi = bi.as_ref().ok_or_else(|| Error::UnusedBlock(b.clone()))?;
+            for (n_id, vars, cursors) in self.get_following_info(b, bi.clone())? {
+                let nbi = bis[n_id.0]
+                    .as_ref()
+                    .ok_or_else(|| Error::UnusedBlock(b.clone()))?;
+                validate_block_eq(
+                    n_id,
+                    &nbi,
+                    &BlockBasicInfo {
+                        start_vars: vars,
+                        start_cursors: cursors,
+                        res_types: bi.res_types,
+                    },
+                )?;
+            }
+            let future_effect = future_effect
+                .as_ref()
+                .ok_or_else(|| Error::UnusedBlock(b.clone()))?;
+            let found_effect = self.merged_block_effects(b, &all_effects)?;
             if found_effect != *future_effect {
                 return Err(Error::FunctionBlockEffectsMismatch(
                     b,
@@ -426,12 +421,19 @@ impl Helper<'_> {
                 ));
             }
         }
+        Ok(())
+    }
+
+    fn validate_function_descriptors<'a>(
+        self: &Self,
+        bis: &Vec<Option<BlockBasicInfo<'a>>>,
+        all_effects: &Vec<Option<Effects>>,
+    ) -> Result<(), Error> {
         for f in &self.prog.funcs {
             let bi = bis[f.entry.0]
                 .as_ref()
                 .ok_or_else(|| Error::UnusedBlock(f.entry.clone()))?;
-            validate_vars_eq(f.entry, &self.func_start_vars(f)?, &bi.start_vars)?;
-            validate_ctxt_eq(f.entry, &Cursors { local: 0, temp: 0 }, &bi.start_cursors)?;
+            validate_block_eq(f.entry, &self.func_block_basic_info(f)?, &bi)?;
             if f.res_types != *bi.res_types {
                 return Err(Error::FunctionBlockReturnTypesMismatch(
                     f.entry,
@@ -475,38 +477,49 @@ impl Helper<'_> {
     }
 }
 
-fn validate_ctxt_eq(block: BlockId, cursors1: &Cursors, cursors2: &Cursors) -> Result<(), Error> {
-    if cursors1 == cursors2 {
-        Ok(())
-    } else {
-        Err(Error::FunctionBlockCursorsMismatch(
-            block,
-            cursors1.clone(),
-            cursors2.clone(),
-        ))
+fn branch_block(b_id: BlockId, branch: &BranchInfo) -> BlockId {
+    match &branch.target {
+        BranchTarget::Fallthrough => BlockId(b_id.0 + 1),
+        BranchTarget::Block(b) => *b,
     }
 }
 
-fn validate_vars_eq(block: BlockId, vars1: &VarStates, vars2: &VarStates) -> Result<(), Error> {
-    if vars1.len() != vars2.len() {
+fn validate_block_eq(
+    block: BlockId,
+    b1: &BlockBasicInfo,
+    b2: &BlockBasicInfo,
+) -> Result<(), Error> {
+    if b1.res_types != b2.res_types {
+        Err(Error::FunctionBlockReturnTypesMismatch(
+            block,
+            b1.res_types.clone(),
+            b2.res_types.clone(),
+        ))
+    } else if b1.start_cursors != b2.start_cursors {
+        Err(Error::FunctionBlockCursorsMismatch(
+            block,
+            b1.start_cursors.clone(),
+            b2.start_cursors.clone(),
+        ))
+    } else if b1.start_vars.len() != b2.start_vars.len() {
         Err(Error::FunctionBlockIdentifiersMismatch(
             block,
-            vars1.keys().map(|x| x.clone()).collect(),
-            vars2.keys().map(|x| x.clone()).collect(),
+            b1.start_vars.keys().map(|x| x.clone()).collect(),
+            b2.start_vars.keys().map(|x| x.clone()).collect(),
         ))
     } else {
-        vars1.iter().try_for_each(
+        b1.start_vars.iter().try_for_each(
             |(
                 id,
                 VarInfo {
                     ty: ty1,
                     ref_val: ref_val1,
                 },
-            )| match vars2.get(id) {
+            )| match b2.start_vars.get(id) {
                 None => Err(Error::FunctionBlockIdentifiersMismatch(
                     block,
-                    vars1.keys().map(|x| x.clone()).collect(),
-                    vars2.keys().map(|x| x.clone()).collect(),
+                    b1.start_vars.keys().map(|x| x.clone()).collect(),
+                    b2.start_vars.keys().map(|x| x.clone()).collect(),
                 )),
                 Some(VarInfo {
                     ty: ty2,

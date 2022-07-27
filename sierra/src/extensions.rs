@@ -51,6 +51,12 @@ impl Registry {
         get_info(&self.ty_reg, ty)
     }
 
+    // Get the information on a type.
+    pub(crate) fn effects(self: &Self, ext: &Extension) -> Result<Vec<Effects>, Error> {
+        self.get_ext(&ext.name)?
+            .effects(&ext.tmpl_args, &self.ty_reg)
+    }
+
     // Given a state and an extension returns all the possible states for different possible
     // branches, as well as info on the fallthrough.
     pub(crate) fn transform(
@@ -59,33 +65,31 @@ impl Registry {
         vars: Vec<VarInfo>,
         cursors: &Cursors,
     ) -> Result<(Vec<ExtensionEffects>, Option<usize>), Error> {
-        let e = match self.ext_reg.get(&ext.name) {
-            None => Err(Error::UnsupportedLibCallName),
-            Some(e) => Ok(e),
-        }?;
+        let e = self.get_ext(&ext.name)?;
         let sign = e.get_signature(&ext.tmpl_args)?;
         if vars.iter().map(|v| &v.ty).ne(sign.args.iter()) {
             return Err(Error::ArgumentsMismatch);
         }
-        let ref_vals = e.mem_change(
+        let ref_vals = e.ref_values(
             &ext.tmpl_args,
             &self.ty_reg,
             cursors,
             vars.into_iter().map(|v| v.ref_val).collect(),
         )?;
+        let effects = e.effects(&ext.tmpl_args, &self.ty_reg)?;
         Ok((
-            ref_vals
-                .into_iter()
-                .zip(sign.results.into_iter())
-                .map(|((m, refs), tys)| ExtensionEffects {
-                    vars: refs
-                        .into_iter()
-                        .zip(tys.into_iter())
-                        .map(|(r, ty)| VarInfo { ty: ty, ref_val: r })
-                        .collect(),
-                    effects: m,
-                })
-                .collect(),
+            izip!(
+                ref_vals.into_iter(),
+                effects.into_iter(),
+                sign.results.into_iter()
+            )
+            .map(|(refs, e, tys)| ExtensionEffects {
+                vars: izip!(refs.into_iter(), tys.into_iter())
+                    .map(|(r, ty)| VarInfo { ty: ty, ref_val: r })
+                    .collect(),
+                effects: e,
+            })
+            .collect(),
             sign.fallthrough,
         ))
     }
@@ -95,10 +99,12 @@ impl Registry {
         ext: &Extension,
         inputs: Vec<Vec<i64>>,
     ) -> Result<(Vec<Vec<i64>>, usize), Error> {
-        match self.ext_reg.get(&ext.name) {
-            None => Err(Error::UnsupportedLibCallName),
-            Some(e) => e.exec(&ext.tmpl_args, &self.ty_reg, inputs),
-        }
+        self.get_ext(&ext.name)?
+            .exec(&ext.tmpl_args, &self.ty_reg, inputs)
+    }
+
+    fn get_ext(self: &Self, name: &String) -> Result<&ExtensionBox, Error> {
+        self.ext_reg.get(name).ok_or(Error::UnsupportedLibCallName)
     }
 }
 
@@ -143,13 +149,20 @@ trait ExtensionImplementation {
     ) -> Result<ExtensionSignature, Error>;
 
     // Returns the changes in context, and reference values of all return values for all possible branches.
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         tmpl_args: &Vec<TemplateArg>,
         registry: &TypeRegistry,
         cursors: &Cursors,
         arg_refs: Vec<RefValue>,
-    ) -> Result<Vec<(Effects, Vec<RefValue>)>, Error>;
+    ) -> Result<Vec<Vec<RefValue>>, Error>;
+
+    // Returns the changes in context, and reference values of all return values for all possible branches.
+    fn effects(
+        self: &Self,
+        tmpl_args: &Vec<TemplateArg>,
+        registry: &TypeRegistry,
+    ) -> Result<Vec<Effects>, Error>;
 
     // Returns the memory representation of the results, given the memory representations of the inputs.
     fn exec(
@@ -169,13 +182,20 @@ trait NonBranchImplementation {
     ) -> Result<(Vec<Type>, Vec<Type>), Error>;
 
     // Returns the changes in context, and reference values of all return values for all possible branches.
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         tmpl_args: &Vec<TemplateArg>,
         registry: &TypeRegistry,
         cursors: &Cursors,
         arg_refs: Vec<RefValue>,
-    ) -> Result<(Effects, Vec<RefValue>), Error>;
+    ) -> Result<Vec<RefValue>, Error>;
+
+    // Returns the changes in context, and reference values of all return values for all possible branches.
+    fn effects(
+        self: &Self,
+        tmpl_args: &Vec<TemplateArg>,
+        registry: &TypeRegistry,
+    ) -> Result<Effects, Error>;
 
     // Returns the memory representation of the results, given the memory representations of the inputs.
     fn exec(
@@ -313,16 +333,24 @@ impl ExtensionImplementation for NonBranchExtension {
         })
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         tmpl_args: &Vec<TemplateArg>,
         registry: &TypeRegistry,
         cursors: &Cursors,
         arg_refs: Vec<RefValue>,
-    ) -> Result<Vec<(Effects, Vec<RefValue>)>, Error> {
+    ) -> Result<Vec<Vec<RefValue>>, Error> {
         Ok(vec![self
             .inner
-            .mem_change(tmpl_args, registry, cursors, arg_refs)?])
+            .ref_values(tmpl_args, registry, cursors, arg_refs)?])
+    }
+
+    fn effects(
+        self: &Self,
+        tmpl_args: &Vec<TemplateArg>,
+        registry: &TypeRegistry,
+    ) -> Result<Vec<Effects>, Error> {
+        Ok(vec![self.inner.effects(tmpl_args, registry)?])
     }
 
     fn exec(

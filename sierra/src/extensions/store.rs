@@ -31,31 +31,33 @@ impl NonBranchImplementation for StoreExtension {
         Ok((vec![as_deferred(ty.clone())], vec![ty.clone()]))
     }
 
-    fn mem_change(
+    fn ref_values(
+        self: &Self,
+        tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+        cursors: &Cursors,
+        _arg_refs: Vec<RefValue>,
+    ) -> Result<Vec<RefValue>, Error> {
+        let (store_ty, _) = unpack_args(tmpl_args)?;
+        Ok(vec![RefValue::Final(match store_ty {
+            StoreType::Temp => MemLocation::Temp(cursors.temp as i64),
+            StoreType::Local => MemLocation::Local(cursors.local as i64),
+        })])
+    }
+
+    fn effects(
         self: &Self,
         tmpl_args: &Vec<TemplateArg>,
         registry: &TypeRegistry,
-        cursors: &Cursors,
-        _arg_refs: Vec<RefValue>,
-    ) -> Result<(Effects, Vec<RefValue>), Error> {
-        let mut effects = gas_usage(1);
+    ) -> Result<Effects, Error> {
         let (store_ty, ty) = unpack_args(tmpl_args)?;
         let ti = get_info(registry, ty)?;
-        let loc = match store_ty {
-            StoreType::Temp => {
-                effects = effects
-                    .add(&Effects::ap_change(ti.size))
-                    .map_err(|e| Error::EffectsAdd(e))?;
-                Ok(MemLocation::Temp(cursors.temp as i64))
-            }
-            StoreType::Local => {
-                effects = effects
-                    .add(&Effects::local_writes(ti.size))
-                    .map_err(|e| Error::EffectsAdd(e))?;
-                Ok(MemLocation::Local(cursors.local as i64))
-            }
-        }?;
-        Ok((effects, vec![RefValue::Final(loc)]))
+        Ok(gas_usage(1)
+            .add(&match store_ty {
+                StoreType::Temp => Effects::ap_change(ti.size),
+                StoreType::Local => Effects::local_writes(ti.size),
+            })
+            .map_err(|e| Error::EffectsAdd(e))?)
     }
 
     fn exec(
@@ -80,14 +82,22 @@ impl NonBranchImplementation for RenameExtension {
         Ok((vec![ty.clone()], vec![ty.clone()]))
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         _tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
         _cursors: &Cursors,
         arg_refs: Vec<RefValue>,
-    ) -> Result<(Effects, Vec<RefValue>), Error> {
-        Ok((Effects::none(), arg_refs))
+    ) -> Result<Vec<RefValue>, Error> {
+        Ok(arg_refs)
+    }
+
+    fn effects(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Effects, Error> {
+        Ok(Effects::none())
     }
 
     fn exec(
@@ -111,17 +121,26 @@ impl NonBranchImplementation for MoveExtension {
         Ok((vec![ty.clone()], vec![as_deferred(ty.clone())]))
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         _tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
         _cursors: &Cursors,
         arg_refs: Vec<RefValue>,
-    ) -> Result<(Effects, Vec<RefValue>), Error> {
-        Ok((
-            Effects::none(),
-            vec![RefValue::OpWithConst(as_final(&arg_refs[0])?, Op::Add, 0)],
-        ))
+    ) -> Result<Vec<RefValue>, Error> {
+        Ok(vec![RefValue::OpWithConst(
+            as_final(&arg_refs[0])?,
+            Op::Add,
+            0,
+        )])
+    }
+
+    fn effects(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Effects, Error> {
+        Ok(Effects::none())
     }
 
     fn exec(
@@ -146,19 +165,24 @@ impl NonBranchImplementation for AllocLocalsExtension {
         Ok((vec![], vec![]))
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         _tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
         _cursors: &Cursors,
         _arg_refs: Vec<RefValue>,
-    ) -> Result<(Effects, Vec<RefValue>), Error> {
-        Ok((
-            Effects::allocate_locals()
-                .add(&gas_usage(1))
-                .map_err(|e| Error::EffectsAdd(e))?,
-            vec![],
-        ))
+    ) -> Result<Vec<RefValue>, Error> {
+        Ok(vec![])
+    }
+
+    fn effects(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Effects, Error> {
+        Ok(Effects::allocate_locals()
+            .add(&gas_usage(1))
+            .map_err(|e| Error::EffectsAdd(e))?)
     }
 
     fn exec(
@@ -192,19 +216,24 @@ impl NonBranchImplementation for AlignTempsExtension {
         Ok((vec![], vec![]))
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
-        tmpl_args: &Vec<TemplateArg>,
+        _tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
         _cursors: &Cursors,
         _arg_refs: Vec<RefValue>,
-    ) -> Result<(Effects, Vec<RefValue>), Error> {
-        Ok((
-            gas_usage(1)
-                .add(&Effects::ap_change(positive_value_arg(tmpl_args)?))
-                .map_err(|e| Error::EffectsAdd(e))?,
-            vec![],
-        ))
+    ) -> Result<Vec<RefValue>, Error> {
+        Ok(vec![])
+    }
+
+    fn effects(
+        self: &Self,
+        tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Effects, Error> {
+        Ok(gas_usage(1)
+            .add(&Effects::ap_change(positive_value_arg(tmpl_args)?))
+            .map_err(|e| Error::EffectsAdd(e))?)
     }
 
     fn exec(

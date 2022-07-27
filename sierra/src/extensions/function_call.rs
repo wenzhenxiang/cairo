@@ -25,13 +25,13 @@ impl NonBranchImplementation for FunctionCallExtension {
         ))
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         tmpl_args: &Vec<TemplateArg>,
         registry: &TypeRegistry,
         cursors: &Cursors,
         arg_refs: Vec<RefValue>,
-    ) -> Result<(Effects, Vec<RefValue>), Error> {
+    ) -> Result<Vec<RefValue>, Error> {
         validate_size_eq(tmpl_args, 0)?;
         let ti = get_info(registry, &types_as_tuple(&self.args))?;
         match &arg_refs[0] {
@@ -41,21 +41,30 @@ impl NonBranchImplementation for FunctionCallExtension {
                 return Err(Error::IllegalArgsLocation);
             }
         }
-        let (base, mut effects) = match self.side_effects.ap_change {
-            None => (0, Effects::ap_invalidation()),
-            Some(change) => ((cursors.temp + change) as i64, Effects::ap_change(change)),
+        let base = match self.side_effects.ap_change {
+            None => 0,
+            Some(change) => (cursors.temp + change) as i64,
+        };
+        Ok(vec![RefValue::Final(MemLocation::Temp(
+            base - ti.size as i64,
+        ))])
+    }
+
+    fn effects(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Effects, Error> {
+        let mut effects = match self.side_effects.ap_change {
+            None => Effects::ap_invalidation(),
+            Some(change) => Effects::ap_change(change),
         };
         for (id, usage) in &self.side_effects.resource_usages {
             effects = effects
                 .add(&Effects::resource_usage(id.clone(), *usage as i64))
                 .map_err(|e| Error::EffectsAdd(e))?;
         }
-
-        let ti = get_info(registry, &types_as_tuple(&self.results))?;
-        Ok((
-            effects,
-            vec![RefValue::Final(MemLocation::Temp(base - ti.size as i64))],
-        ))
+        Ok(effects)
     }
 
     fn exec(

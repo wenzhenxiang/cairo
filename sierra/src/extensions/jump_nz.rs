@@ -15,17 +15,22 @@ impl ExtensionImplementation for JumpNzExtension {
         })
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         _tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
         _cursors: &Cursors,
         arg_refs: Vec<RefValue>,
-    ) -> Result<Vec<(Effects, Vec<RefValue>)>, Error> {
-        Ok(vec![
-            (gas_usage(1), vec![arg_refs[0].clone()]),
-            (gas_usage(1), vec![]),
-        ])
+    ) -> Result<Vec<Vec<RefValue>>, Error> {
+        Ok(vec![vec![arg_refs[0].clone()], vec![]])
+    }
+
+    fn effects(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Vec<Effects>, Error> {
+        Ok(vec![gas_usage(1), gas_usage(1)])
     }
 
     fn exec(
@@ -57,14 +62,22 @@ impl NonBranchImplementation for UnwrapNzExtension {
         ))
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         _tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
         _cursors: &Cursors,
         arg_refs: Vec<RefValue>,
-    ) -> Result<(Effects, Vec<RefValue>), Error> {
-        Ok((Effects::none(), arg_refs))
+    ) -> Result<Vec<RefValue>, Error> {
+        Ok(arg_refs)
+    }
+
+    fn effects(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Effects, Error> {
+        Ok(Effects::none())
     }
 
     fn exec(

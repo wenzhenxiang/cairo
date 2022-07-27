@@ -14,13 +14,13 @@ impl NonBranchImplementation for TuplePackExtension {
         Ok((arg_types, vec![as_tuple(tmpl_args.clone())]))
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         tmpl_args: &Vec<TemplateArg>,
         registry: &TypeRegistry,
         _cursors: &Cursors,
         arg_refs: Vec<RefValue>,
-    ) -> Result<(Effects, Vec<RefValue>), Error> {
+    ) -> Result<Vec<RefValue>, Error> {
         let mut tup_mem: Option<(MemLocation, usize)> = None;
         for (ref_val, tmpl_arg) in arg_refs.iter().zip(tmpl_args.iter()) {
             let size = get_info(registry, unwrap_type(tmpl_arg)?)?.size;
@@ -33,13 +33,18 @@ impl NonBranchImplementation for TuplePackExtension {
                     .ok_or(Error::LocationsNonCosecutive),
             }?);
         }
-        Ok((
-            Effects::none(),
-            vec![match tup_mem {
-                None => RefValue::Transient,
-                Some((mem, _)) => RefValue::Final(mem),
-            }],
-        ))
+        Ok(vec![match tup_mem {
+            None => RefValue::Transient,
+            Some((mem, _)) => RefValue::Final(mem),
+        }])
+    }
+
+    fn effects(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Effects, Error> {
+        Ok(Effects::none())
     }
 
     fn exec(
@@ -77,13 +82,13 @@ impl NonBranchImplementation for TupleUnpackExtension {
         Ok((vec![as_tuple(tmpl_args.clone())], arg_types))
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         tmpl_args: &Vec<TemplateArg>,
         registry: &TypeRegistry,
         _cursors: &Cursors,
         arg_refs: Vec<RefValue>,
-    ) -> Result<(Effects, Vec<RefValue>), Error> {
+    ) -> Result<Vec<RefValue>, Error> {
         let mut refs = vec![];
         let mut offset = 0;
         for tmpl_arg in tmpl_args {
@@ -103,7 +108,15 @@ impl NonBranchImplementation for TupleUnpackExtension {
             }?);
             offset += size as i64;
         }
-        Ok((Effects::none(), refs))
+        Ok(refs)
+    }
+
+    fn effects(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Effects, Error> {
+        Ok(Effects::none())
     }
 
     fn exec(

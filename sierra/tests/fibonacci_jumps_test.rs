@@ -110,4 +110,8 @@ fn simulation_test() {
         sierra::simulation::run(&prog, "Fibonacci", vec![1000, 8]),
         Ok(vec![966, 34])
     );
+    assert_eq!(
+        sierra::simulation::run(&prog, "Fibonacci", vec![100, 80]),
+        Ok(vec![0, -1])
+    );
 }

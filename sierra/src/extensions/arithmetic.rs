@@ -33,31 +33,37 @@ impl NonBranchImplementation for ArithmeticExtension {
         }
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
         _cursors: &Cursors,
         arg_refs: Vec<RefValue>,
-    ) -> Result<(Effects, Vec<RefValue>), Error> {
+    ) -> Result<Vec<RefValue>, Error> {
         match tmpl_args.len() {
-            1 => Ok((
-                Effects::none(),
-                vec![RefValue::Op(
-                    as_final(&arg_refs[0])?,
-                    self.op,
-                    as_final(&arg_refs[1])?,
-                )],
-            )),
+            1 => Ok(vec![RefValue::Op(
+                as_final(&arg_refs[0])?,
+                self.op,
+                as_final(&arg_refs[1])?,
+            )]),
             2 => {
                 let (_, c) = type_value_args(tmpl_args)?;
-                Ok((
-                    Effects::none(),
-                    vec![RefValue::OpWithConst(as_final(&arg_refs[0])?, self.op, c)],
-                ))
+                Ok(vec![RefValue::OpWithConst(
+                    as_final(&arg_refs[0])?,
+                    self.op,
+                    c,
+                )])
             }
             _ => Err(Error::WrongNumberOfTypeArgs),
         }
+    }
+
+    fn effects(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Effects, Error> {
+        Ok(Effects::none())
     }
 
     fn exec(
@@ -124,35 +130,41 @@ impl NonBranchImplementation for DivExtension {
         }
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
         _cursors: &Cursors,
         arg_refs: Vec<RefValue>,
-    ) -> Result<(Effects, Vec<RefValue>), Error> {
+    ) -> Result<Vec<RefValue>, Error> {
         match tmpl_args.len() {
-            1 => Ok((
-                Effects::none(),
-                vec![RefValue::Op(
-                    as_final(&arg_refs[0])?,
-                    self.op,
-                    as_final(&arg_refs[1])?,
-                )],
-            )),
+            1 => Ok(vec![RefValue::Op(
+                as_final(&arg_refs[0])?,
+                self.op,
+                as_final(&arg_refs[1])?,
+            )]),
             2 => {
                 let (_, c) = type_value_args(tmpl_args)?;
                 if c == 0 {
                     Err(Error::UnsupportedTypeArg)
                 } else {
-                    Ok((
-                        Effects::none(),
-                        vec![RefValue::OpWithConst(as_final(&arg_refs[0])?, self.op, c)],
-                    ))
+                    Ok(vec![RefValue::OpWithConst(
+                        as_final(&arg_refs[0])?,
+                        self.op,
+                        c,
+                    )])
                 }
             }
             _ => Err(Error::WrongNumberOfTypeArgs),
         }
+    }
+
+    fn effects(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Effects, Error> {
+        Ok(Effects::none())
     }
 
     fn exec(
@@ -198,17 +210,22 @@ impl NonBranchImplementation for DuplicateExtension {
         ))
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         _tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
         _cursors: &Cursors,
         arg_refs: Vec<RefValue>,
-    ) -> Result<(Effects, Vec<RefValue>), Error> {
-        Ok((
-            Effects::none(),
-            vec![arg_refs[0].clone(), arg_refs[0].clone()],
-        ))
+    ) -> Result<Vec<RefValue>, Error> {
+        Ok(vec![arg_refs[0].clone(), arg_refs[0].clone()])
+    }
+
+    fn effects(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Effects, Error> {
+        Ok(Effects::none())
     }
 
     fn exec(
@@ -234,15 +251,23 @@ impl NonBranchImplementation for ConstantExtension {
         Ok((vec![], vec![as_deferred(numeric_type.clone())]))
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
         _cursors: &Cursors,
         _arg_refs: Vec<RefValue>,
-    ) -> Result<(Effects, Vec<RefValue>), Error> {
+    ) -> Result<Vec<RefValue>, Error> {
         let (_, c) = type_value_args(tmpl_args)?;
-        Ok((Effects::none(), vec![RefValue::Const(c)]))
+        Ok(vec![RefValue::Const(c)])
+    }
+
+    fn effects(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Effects, Error> {
+        Ok(Effects::none())
     }
 
     fn exec(
@@ -268,14 +293,22 @@ impl NonBranchImplementation for IgnoreExtension {
         Ok((vec![numeric_type.clone()], vec![]))
     }
 
-    fn mem_change(
+    fn ref_values(
         self: &Self,
         _tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
         _cursors: &Cursors,
         _arg_refs: Vec<RefValue>,
-    ) -> Result<(Effects, Vec<RefValue>), Error> {
-        Ok((Effects::none(), vec![]))
+    ) -> Result<Vec<RefValue>, Error> {
+        Ok(vec![])
+    }
+
+    fn effects(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Effects, Error> {
+        Ok(Effects::none())
     }
 
     fn exec(
