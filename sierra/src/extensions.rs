@@ -3,6 +3,7 @@ use crate::{
     effects::{Effects, Error as EffError},
     graph::*,
     ref_value::*,
+    resources::{resource_usage, ResourceMap},
 };
 use std::collections::HashMap;
 use Result::*;
@@ -55,6 +56,12 @@ impl Registry {
     pub(crate) fn effects(self: &Self, ext: &Extension) -> Result<Vec<Effects>, Error> {
         self.get_ext(&ext.name)?
             .effects(&ext.tmpl_args, &self.ty_reg)
+    }
+
+    // Get the information on a type.
+    pub(crate) fn resource_usages(self: &Self, ext: &Extension) -> Result<Vec<ResourceMap>, Error> {
+        self.get_ext(&ext.name)?
+            .resource_usages(&ext.tmpl_args, &self.ty_reg)
     }
 
     // Given a state and an extension returns all the possible states for different possible
@@ -164,6 +171,13 @@ trait ExtensionImplementation {
         registry: &TypeRegistry,
     ) -> Result<Vec<Effects>, Error>;
 
+    // Returns the changes in context, and reference values of all return values for all possible branches.
+    fn resource_usages(
+        self: &Self,
+        tmpl_args: &Vec<TemplateArg>,
+        registry: &TypeRegistry,
+    ) -> Result<Vec<ResourceMap>, Error>;
+
     // Returns the memory representation of the results, given the memory representations of the inputs.
     fn exec(
         self: &Self,
@@ -196,6 +210,13 @@ trait NonBranchImplementation {
         tmpl_args: &Vec<TemplateArg>,
         registry: &TypeRegistry,
     ) -> Result<Effects, Error>;
+
+    // Returns the changes in context, and reference values of all return values for all possible branches.
+    fn resource_usages(
+        self: &Self,
+        tmpl_args: &Vec<TemplateArg>,
+        registry: &TypeRegistry,
+    ) -> Result<ResourceMap, Error>;
 
     // Returns the memory representation of the results, given the memory representations of the inputs.
     fn exec(
@@ -310,8 +331,8 @@ fn as_final(ref_val: &RefValue) -> Result<MemLocation, Error> {
     }
 }
 
-fn gas_usage(count: i64) -> Effects {
-    Effects::resource_usage(Identifier("gas".to_string()), count)
+fn gas_usage(count: i64) -> ResourceMap {
+    resource_usage(Identifier("gas".to_string()), count)
 }
 
 type NonBranchBox = Box<dyn NonBranchImplementation + Sync + Send>;
@@ -351,6 +372,14 @@ impl ExtensionImplementation for NonBranchExtension {
         registry: &TypeRegistry,
     ) -> Result<Vec<Effects>, Error> {
         Ok(vec![self.inner.effects(tmpl_args, registry)?])
+    }
+
+    fn resource_usages(
+        self: &Self,
+        tmpl_args: &Vec<TemplateArg>,
+        registry: &TypeRegistry,
+    ) -> Result<Vec<ResourceMap>, Error> {
+        Ok(vec![self.inner.resource_usages(tmpl_args, registry)?])
     }
 
     fn exec(

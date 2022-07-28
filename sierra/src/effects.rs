@@ -1,20 +1,10 @@
-use std::{cmp::max, collections::HashMap};
-
-use crate::graph::Identifier;
-
-// The context that can be changed by a running line, not including its direct inputs and outputs.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Context {
-    pub local_cursur: usize,
-    pub temp_cursur: usize,
-}
+use std::cmp::max;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Error {
     LocalMemoryAlreadyAllocated,
     LocalMemoryCantBeAllocated,
     LocalMemoryUsedBeforeAllocation,
-    ResourceUsageMismatch(ResourceMap, ResourceMap),
     LocalAllocationMismatch,
 }
 
@@ -28,11 +18,7 @@ pub struct Effects {
     // The number of writes to temp in the considered scope.
     pub ap_change: Option<usize>,
     pub temp_used: bool,
-    // Resource usages in the considered scope.
-    pub resource_usages: ResourceMap,
 }
-
-pub(crate) type ResourceMap = HashMap<Identifier, i64>;
 
 impl Effects {
     pub(crate) fn none() -> Effects {
@@ -41,7 +27,6 @@ impl Effects {
             local_allocated: false,
             ap_change: Some(0),
             temp_used: false,
-            resource_usages: ResourceMap::new(),
         }
     }
     pub(crate) fn local_writes(v: usize) -> Effects {
@@ -50,7 +35,6 @@ impl Effects {
             local_allocated: false,
             ap_change: Some(0),
             temp_used: false,
-            resource_usages: ResourceMap::new(),
         }
     }
     pub(crate) fn allocate_locals() -> Effects {
@@ -59,7 +43,6 @@ impl Effects {
             local_allocated: true,
             ap_change: Some(0),
             temp_used: false,
-            resource_usages: ResourceMap::new(),
         }
     }
     pub(crate) fn ap_invalidation() -> Effects {
@@ -68,7 +51,6 @@ impl Effects {
             local_allocated: false,
             ap_change: None,
             temp_used: true,
-            resource_usages: ResourceMap::new(),
         }
     }
     pub(crate) fn ap_change(v: usize) -> Effects {
@@ -77,16 +59,6 @@ impl Effects {
             local_allocated: false,
             ap_change: Some(v),
             temp_used: true,
-            resource_usages: ResourceMap::new(),
-        }
-    }
-    pub(crate) fn resource_usage(id: Identifier, count: i64) -> Effects {
-        Effects {
-            local_writes: 0,
-            local_allocated: false,
-            ap_change: Some(0),
-            temp_used: false,
-            resource_usages: ResourceMap::from([(id, count)]),
         }
     }
 
@@ -108,27 +80,10 @@ impl Effects {
                 _ => None,
             },
             temp_used: self.temp_used || other.temp_used,
-            resource_usages: chain!(
-                self.resource_usages.iter().map(|(r, change)| (
-                    r.clone(),
-                    change + other.resource_usages.get(r).unwrap_or(&0),
-                )),
-                other.resource_usages.iter().map(|(r, change)| (
-                    r.clone(),
-                    self.resource_usages.get(r).unwrap_or(&0) + change
-                ))
-            )
-            .collect(),
         })
     }
 
     pub(crate) fn converge(self: Self, other: &Effects) -> Result<Effects, Error> {
-        if self.resource_usages != other.resource_usages {
-            return Err(Error::ResourceUsageMismatch(
-                self.resource_usages.clone(),
-                other.resource_usages.clone(),
-            ));
-        }
         if self.local_allocated && !other.local_allocated && other.local_writes > 0
             || other.local_allocated && !self.local_allocated && self.local_writes > 0
         {
@@ -142,7 +97,6 @@ impl Effects {
                 _ => None,
             },
             temp_used: self.temp_used || other.temp_used,
-            resource_usages: self.resource_usages,
         })
     }
 }
@@ -150,7 +104,6 @@ impl Effects {
 #[cfg(test)]
 mod function {
     use super::*;
-    use crate::graph::Identifier;
     #[test]
     fn test_add() {
         assert_eq!(
@@ -172,17 +125,6 @@ mod function {
         assert_eq!(
             Effects::ap_change(1).add(&Effects::ap_invalidation()),
             Ok(Effects::ap_invalidation())
-        );
-        assert_eq!(
-            Effects::resource_usage(Identifier("g".to_string()), 1)
-                .add(&Effects::resource_usage(Identifier("g".to_string()), 1)),
-            Ok(Effects::resource_usage(Identifier("g".to_string()), 2))
-        );
-        assert_eq!(
-            Effects::resource_usage(Identifier("g1".to_string()), 2)
-                .add(&Effects::resource_usage(Identifier("g2".to_string()), 1)),
-            Effects::resource_usage(Identifier("g2".to_string()), 1)
-                .add(&Effects::resource_usage(Identifier("g1".to_string()), 2))
         );
         assert_eq!(
             Effects::allocate_locals().add(&Effects::allocate_locals()),
@@ -218,13 +160,6 @@ mod function {
         assert_eq!(
             Effects::ap_change(2).converge(&Effects::ap_change(2)),
             Ok(Effects::ap_change(2))
-        );
-        assert_eq!(
-            Effects::resource_usage(Identifier("g".to_string()), 1).converge(&Effects::none()),
-            Err(Error::ResourceUsageMismatch(
-                ResourceMap::from([(Identifier("g".to_string()), 1)]),
-                ResourceMap::new()
-            ))
         );
         assert_eq!(
             Effects::allocate_locals()

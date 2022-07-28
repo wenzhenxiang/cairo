@@ -52,12 +52,18 @@ impl NonBranchImplementation for StoreExtension {
     ) -> Result<Effects, Error> {
         let (store_ty, ty) = unpack_args(tmpl_args)?;
         let ti = get_info(registry, ty)?;
-        Ok(gas_usage(1)
-            .add(&match store_ty {
-                StoreType::Temp => Effects::ap_change(ti.size),
-                StoreType::Local => Effects::local_writes(ti.size),
-            })
-            .map_err(|e| Error::EffectsAdd(e))?)
+        Ok(match store_ty {
+            StoreType::Temp => Effects::ap_change(ti.size),
+            StoreType::Local => Effects::local_writes(ti.size),
+        })
+    }
+
+    fn resource_usages(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<ResourceMap, Error> {
+        Ok(gas_usage(1))
     }
 
     fn exec(
@@ -98,6 +104,14 @@ impl NonBranchImplementation for RenameExtension {
         _registry: &TypeRegistry,
     ) -> Result<Effects, Error> {
         Ok(Effects::none())
+    }
+
+    fn resource_usages(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<ResourceMap, Error> {
+        Ok(ResourceMap::new())
     }
 
     fn exec(
@@ -143,6 +157,14 @@ impl NonBranchImplementation for MoveExtension {
         Ok(Effects::none())
     }
 
+    fn resource_usages(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<ResourceMap, Error> {
+        Ok(ResourceMap::new())
+    }
+
     fn exec(
         self: &Self,
         _tmpl_args: &Vec<TemplateArg>,
@@ -180,9 +202,15 @@ impl NonBranchImplementation for AllocLocalsExtension {
         _tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
     ) -> Result<Effects, Error> {
-        Ok(Effects::allocate_locals()
-            .add(&gas_usage(1))
-            .map_err(|e| Error::EffectsAdd(e))?)
+        Ok(Effects::allocate_locals())
+    }
+
+    fn resource_usages(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<ResourceMap, Error> {
+        Ok(gas_usage(1))
     }
 
     fn exec(
@@ -231,9 +259,15 @@ impl NonBranchImplementation for AlignTempsExtension {
         tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
     ) -> Result<Effects, Error> {
-        Ok(gas_usage(1)
-            .add(&Effects::ap_change(positive_value_arg(tmpl_args)?))
-            .map_err(|e| Error::EffectsAdd(e))?)
+        Ok(Effects::ap_change(positive_value_arg(tmpl_args)?))
+    }
+
+    fn resource_usages(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<ResourceMap, Error> {
+        Ok(gas_usage(1))
     }
 
     fn exec(

@@ -30,6 +30,14 @@ impl ExtensionImplementation for JumpNzExtension {
         _tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
     ) -> Result<Vec<Effects>, Error> {
+        Ok(vec![Effects::none(), Effects::none()])
+    }
+
+    fn resource_usages(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Vec<ResourceMap>, Error> {
         Ok(vec![gas_usage(1), gas_usage(1)])
     }
 
@@ -78,6 +86,14 @@ impl NonBranchImplementation for UnwrapNzExtension {
         _registry: &TypeRegistry,
     ) -> Result<Effects, Error> {
         Ok(Effects::none())
+    }
+
+    fn resource_usages(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<ResourceMap, Error> {
+        Ok(ResourceMap::new())
     }
 
     fn exec(

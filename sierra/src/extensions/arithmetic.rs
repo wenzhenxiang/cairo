@@ -66,6 +66,14 @@ impl NonBranchImplementation for ArithmeticExtension {
         Ok(Effects::none())
     }
 
+    fn resource_usages(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<ResourceMap, Error> {
+        Ok(ResourceMap::new())
+    }
+
     fn exec(
         self: &Self,
         tmpl_args: &Vec<TemplateArg>,
@@ -167,6 +175,14 @@ impl NonBranchImplementation for DivExtension {
         Ok(Effects::none())
     }
 
+    fn resource_usages(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<ResourceMap, Error> {
+        Ok(ResourceMap::new())
+    }
+
     fn exec(
         self: &Self,
         tmpl_args: &Vec<TemplateArg>,
@@ -228,6 +244,14 @@ impl NonBranchImplementation for DuplicateExtension {
         Ok(Effects::none())
     }
 
+    fn resource_usages(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<ResourceMap, Error> {
+        Ok(ResourceMap::new())
+    }
+
     fn exec(
         self: &Self,
         _tmpl_args: &Vec<TemplateArg>,
@@ -270,6 +294,14 @@ impl NonBranchImplementation for ConstantExtension {
         Ok(Effects::none())
     }
 
+    fn resource_usages(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<ResourceMap, Error> {
+        Ok(ResourceMap::new())
+    }
+
     fn exec(
         self: &Self,
         tmpl_args: &Vec<TemplateArg>,
@@ -309,6 +341,14 @@ impl NonBranchImplementation for IgnoreExtension {
         _registry: &TypeRegistry,
     ) -> Result<Effects, Error> {
         Ok(Effects::none())
+    }
+
+    fn resource_usages(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<ResourceMap, Error> {
+        Ok(ResourceMap::new())
     }
 
     fn exec(

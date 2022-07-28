@@ -6,6 +6,7 @@ use crate::{
     extensions::{Error as ExtError, ExtensionEffects, Registry, VarInfo},
     graph::*,
     ref_value::{mem_reducer, MemLocation, RefValue},
+    resources::{resource_add, resource_usage, ResourceMap},
 };
 use std::collections::HashMap;
 use Result::*;
@@ -15,20 +16,21 @@ pub fn validate(prog: &Program) -> Result<(), Error> {
         prog: prog,
         reg: Registry::new(prog),
     };
+    let block_future_effects = h.calc_block_future_effects()?;
+    let block_future_usages = h.calc_block_future_resource_usages()?;
     let mut block_basic_infos = vec![None; prog.blocks.len()];
     for f in &prog.funcs {
         h.calc_basic_info(f.entry, h.func_block_basic_info(f)?, &mut block_basic_infos)?;
     }
-    let block_future_effects = h.calc_block_future_effects()?;
-    h.validate(block_basic_infos, block_future_effects)
+    h.validate(block_basic_infos, block_future_effects, block_future_usages)
 }
 
 type VarStates = HashMap<Identifier, VarInfo>;
 
 #[derive(Debug, Clone)]
-enum NextEffects {
-    Continue(Vec<(BlockId, Effects)>),
-    Return(Effects),
+enum NextValues<T> {
+    Continue(Vec<(BlockId, T)>),
+    Return(T),
 }
 
 #[derive(Debug, Clone)]
@@ -76,7 +78,7 @@ impl Helper<'_> {
         })
     }
 
-    fn get_next_effects(self: &Self, block_id: BlockId) -> Result<NextEffects, Error> {
+    fn get_next_effects(self: &Self, block_id: BlockId) -> Result<NextValues<Effects>, Error> {
         let block = &self.prog.blocks[block_id.0];
         let mut effects = Effects::none();
         for invc in &block.invocations {
@@ -92,7 +94,7 @@ impl Helper<'_> {
                 .map_err(|e| Error::Extension(ExtError::EffectsAdd(e), invc.to_string()))?;
         }
         match &block.exit {
-            BlockExit::Return(_) => Ok(NextEffects::Return(effects)),
+            BlockExit::Return(_) => Ok(NextValues::<Effects>::Return(effects)),
             BlockExit::Jump(j) => {
                 let ext_effects = self
                     .reg
@@ -110,7 +112,44 @@ impl Helper<'_> {
                         })?,
                     ));
                 }
-                Ok(NextEffects::Continue(next_effects))
+                Ok(NextValues::<Effects>::Continue(next_effects))
+            }
+        }
+    }
+
+    fn get_next_resources(
+        self: &Self,
+        block_id: BlockId,
+    ) -> Result<NextValues<ResourceMap>, Error> {
+        let block = &self.prog.blocks[block_id.0];
+        let mut usages = ResourceMap::new();
+        for invc in &block.invocations {
+            let mut ext_usages = self
+                .reg
+                .resource_usages(&invc.ext)
+                .map_err(|e| Error::Extension(e, invc.to_string()))?;
+            if ext_usages.len() != 1 {
+                return Err(Error::ExtensionBranchesMismatch(invc.to_string()));
+            }
+            usages = resource_add(&usages, &ext_usages.remove(0));
+        }
+        match &block.exit {
+            BlockExit::Return(_) => Ok(NextValues::<ResourceMap>::Return(usages)),
+            BlockExit::Jump(j) => {
+                let ext_usages = self
+                    .reg
+                    .resource_usages(&j.ext)
+                    .map_err(|e| Error::Extension(e, j.to_string()))?;
+                if ext_usages.len() != j.branches.len() {
+                    return Err(Error::ExtensionBranchesMismatch(j.to_string()));
+                }
+                Ok(NextValues::<ResourceMap>::Continue(
+                    izip!(j.branches.iter(), ext_usages.into_iter())
+                        .map(|(branch, u)| {
+                            (branch_block(block_id, branch), resource_add(&usages, &u))
+                        })
+                        .collect(),
+                ))
             }
         }
     }
@@ -332,8 +371,8 @@ impl Helper<'_> {
         all_effects: &Vec<Option<Effects>>,
     ) -> Result<Effects, Error> {
         Ok(match self.get_next_effects(b)? {
-            NextEffects::Return(block_effects) => block_effects.clone(),
-            NextEffects::Continue(nexts) => {
+            NextValues::<Effects>::Return(block_effects) => block_effects.clone(),
+            NextValues::<Effects>::Continue(nexts) => {
                 let mut merged_effects: Option<Effects> = None;
                 for (n_id, block_effects) in nexts {
                     if let Some(future_effects) = &all_effects[n_id.0] {
@@ -379,21 +418,83 @@ impl Helper<'_> {
         Ok(all_effects)
     }
 
+    fn merged_block_resource_usages(
+        self: &Self,
+        b: BlockId,
+        all_usages: &Vec<Option<ResourceMap>>,
+    ) -> Result<ResourceMap, Error> {
+        Ok(match self.get_next_resources(b)? {
+            NextValues::<ResourceMap>::Return(block_usages) => block_usages.clone(),
+            NextValues::<ResourceMap>::Continue(nexts) => {
+                let mut merged_usages: Option<ResourceMap> = None;
+                for (n_id, block_usages) in nexts {
+                    if let Some(future_usages) = &all_usages[n_id.0] {
+                        let usages = resource_add(&block_usages, future_usages);
+                        merged_usages = Some(match merged_usages {
+                            None => usages,
+                            Some(prev) => {
+                                if prev != usages {
+                                    return Err(Error::FunctionBlockResourceMismatch(
+                                        b, prev, usages,
+                                    ));
+                                }
+                                prev
+                            }
+                        });
+                    }
+                }
+                merged_usages.unwrap()
+            }
+        })
+    }
+
+    // Function can only be called in reverse topological order - since some next stage must exist.
+    fn calc_block_future_resource_usages_for_blocks(
+        self: &Self,
+        ordered_blocks: &Vec<BlockId>,
+        all_usages: &mut Vec<Option<ResourceMap>>,
+    ) -> Result<(), Error> {
+        for b in ordered_blocks {
+            if b.0 >= all_usages.len() {
+                return Err(Error::FunctionBlockOutOfBounds);
+            }
+            let usages = self.merged_block_resource_usages(*b, all_usages)?;
+            all_usages[b.0] = Some(usages);
+        }
+        Ok(())
+    }
+
+    fn calc_block_future_resource_usages<'a>(
+        self: &Self,
+    ) -> Result<Vec<Option<ResourceMap>>, Error> {
+        let mut all_usages = vec![None; self.prog.blocks.len()];
+        let ordering = self.reverse_topological_ordering();
+        // First iteration - making sure all blocks has some calculation.
+        self.calc_block_future_resource_usages_for_blocks(&ordering, &mut all_usages)?;
+        // Second iteration - now actually calculating the correct values for cycles.
+        self.calc_block_future_resource_usages_for_blocks(&ordering, &mut all_usages)?;
+        Ok(all_usages)
+    }
+
     fn validate<'a>(
         self: &Self,
         bis: Vec<Option<BlockBasicInfo<'a>>>,
         all_effects: Vec<Option<Effects>>,
+        all_usages: Vec<Option<ResourceMap>>,
     ) -> Result<(), Error> {
-        self.validate_block_info(&bis, &all_effects)?;
-        self.validate_function_descriptors(&bis, &all_effects)
+        self.validate_block_info(&bis, &all_effects, &all_usages)?;
+        self.validate_function_descriptors(&bis, &all_effects, &all_usages)
     }
 
     fn validate_block_info<'a>(
         self: &Self,
         bis: &Vec<Option<BlockBasicInfo<'a>>>,
         all_effects: &Vec<Option<Effects>>,
+        all_usages: &Vec<Option<ResourceMap>>,
     ) -> Result<(), Error> {
-        for (b, bi, future_effect) in izip!((0..).map(|b| BlockId(b)), bis, all_effects) {
+        for (b, bi, future_effect, future_usage) in
+            izip!((0..).map(|b| BlockId(b)), bis, all_effects, all_usages)
+        {
             let bi = bi.as_ref().ok_or_else(|| Error::UnusedBlock(b.clone()))?;
             for (n_id, vars, cursors) in self.get_following_info(b, bi.clone())? {
                 let nbi = bis[n_id.0]
@@ -420,6 +521,17 @@ impl Helper<'_> {
                     future_effect.clone(),
                 ));
             }
+            let future_usage = future_usage
+                .as_ref()
+                .ok_or_else(|| Error::UnusedBlock(b.clone()))?;
+            let found_usage = self.merged_block_resource_usages(b, &all_usages)?;
+            if found_usage != *future_usage {
+                return Err(Error::FunctionBlockResourceMismatch(
+                    b,
+                    found_usage,
+                    future_usage.clone(),
+                ));
+            }
         }
         Ok(())
     }
@@ -428,6 +540,7 @@ impl Helper<'_> {
         self: &Self,
         bis: &Vec<Option<BlockBasicInfo<'a>>>,
         all_effects: &Vec<Option<Effects>>,
+        all_usages: &Vec<Option<ResourceMap>>,
     ) -> Result<(), Error> {
         for f in &self.prog.funcs {
             let bi = bis[f.entry.0]
@@ -441,34 +554,36 @@ impl Helper<'_> {
                     bi.res_types.clone(),
                 ));
             }
-            let future_effects = all_effects[f.entry.0]
+            let future_ap_change = all_effects[f.entry.0]
                 .as_ref()
-                .ok_or_else(|| Error::UnusedBlock(f.entry.clone()))?;
-            let with_func = future_effects
-                .add(&Effects::resource_usage(Identifier("gas".to_string()), 2))
+                .ok_or_else(|| Error::UnusedBlock(f.entry.clone()))?
+                .add(&&Effects::ap_change(2))
                 .unwrap()
-                .add(&Effects::ap_change(2))
-                .unwrap();
-            if f.side_effects.ap_change.is_some() && with_func.ap_change != f.side_effects.ap_change
-            {
+                .ap_change;
+            if f.side_effects.ap_change.is_some() && future_ap_change != f.side_effects.ap_change {
                 return Err(Error::FunctionReturnApChangeMismatch(
                     f.name.clone(),
-                    with_func.ap_change,
+                    future_ap_change,
                 ));
             }
+            let future_resource_usage = resource_add(
+                all_usages[f.entry.0]
+                    .as_ref()
+                    .ok_or_else(|| Error::UnusedBlock(f.entry.clone()))?,
+                &resource_usage(Identifier("gas".to_string()), 2),
+            );
             let expected: HashMap<Identifier, i64> = f
                 .side_effects
                 .resource_usages
                 .iter()
                 .map(|(id, v)| (id.clone(), *v as i64))
                 .collect();
-            for id in chain!(expected.keys(), with_func.resource_usages.keys()) {
-                if expected.get(id).unwrap_or(&0) != with_func.resource_usages.get(id).unwrap_or(&0)
-                {
+            for id in chain!(expected.keys(), future_resource_usage.keys()) {
+                if expected.get(id).unwrap_or(&0) != future_resource_usage.get(id).unwrap_or(&0) {
                     return Err(Error::FunctionReturnResourceUsageMismatch(
                         f.name.clone(),
                         id.clone(),
-                        *with_func.resource_usages.get(id).unwrap_or(&0),
+                        *future_resource_usage.get(id).unwrap_or(&0),
                     ));
                 }
             }
@@ -602,7 +717,7 @@ fn normalize_for_block_start(mut vars: VarStates, mut cursors: Cursors) -> (VarS
 #[cfg(test)]
 mod function {
     use super::*;
-    use crate::{effects::ResourceMap, ProgramParser};
+    use crate::ProgramParser;
 
     #[test]
     fn empty() {
@@ -806,12 +921,10 @@ mod function {
                 )
                 .unwrap()
             ),
-            Err(Error::EffectsConverge(
+            Err(Error::FunctionBlockResourceMismatch(
                 BlockId(1),
-                crate::effects::Error::ResourceUsageMismatch(
-                    ResourceMap::from([(Identifier("gas".to_string()), 0)]),
-                    ResourceMap::from([(Identifier("gas".to_string()), 1)])
-                )
+                ResourceMap::from([(Identifier("gas".to_string()), 0)]),
+                ResourceMap::from([(Identifier("gas".to_string()), 1)])
             ))
         );
     }

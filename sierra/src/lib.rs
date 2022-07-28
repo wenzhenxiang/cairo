@@ -7,6 +7,7 @@ pub mod error;
 mod extensions;
 pub mod graph;
 mod ref_value;
+pub mod resources;
 pub mod simulation;
 pub mod soundness;
 pub mod utils;

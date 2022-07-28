@@ -40,9 +40,17 @@ impl ExtensionImplementation for GetGasExtension {
 
     fn effects(
         self: &Self,
-        tmpl_args: &Vec<TemplateArg>,
+        _tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
     ) -> Result<Vec<Effects>, Error> {
+        Ok(vec![Effects::none(), Effects::none()])
+    }
+
+    fn resource_usages(
+        self: &Self,
+        tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Vec<ResourceMap>, Error> {
         Ok(vec![
             gas_usage(-gas_value_arg(tmpl_args)? + 1),
             gas_usage(1),
@@ -95,9 +103,17 @@ impl NonBranchImplementation for RefundGasExtension {
 
     fn effects(
         self: &Self,
-        tmpl_args: &Vec<TemplateArg>,
+        _tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
     ) -> Result<Effects, Error> {
+        Ok(Effects::none())
+    }
+
+    fn resource_usages(
+        self: &Self,
+        tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<ResourceMap, Error> {
         Ok(gas_usage(gas_value_arg(tmpl_args)?))
     }
 

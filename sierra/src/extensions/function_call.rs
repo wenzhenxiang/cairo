@@ -1,5 +1,6 @@
 use crate::{
     extensions::*,
+    resources::resource_add,
     utils::{as_tuple, type_arg},
 };
 
@@ -55,16 +56,22 @@ impl NonBranchImplementation for FunctionCallExtension {
         _tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
     ) -> Result<Effects, Error> {
-        let mut effects = match self.side_effects.ap_change {
+        Ok(match self.side_effects.ap_change {
             None => Effects::ap_invalidation(),
             Some(change) => Effects::ap_change(change),
-        };
+        })
+    }
+
+    fn resource_usages(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<ResourceMap, Error> {
+        let mut r = ResourceMap::new();
         for (id, usage) in &self.side_effects.resource_usages {
-            effects = effects
-                .add(&Effects::resource_usage(id.clone(), *usage as i64))
-                .map_err(|e| Error::EffectsAdd(e))?;
+            r = resource_add(&r, &resource_usage(id.clone(), *usage as i64));
         }
-        Ok(effects)
+        Ok(r)
     }
 
     fn exec(

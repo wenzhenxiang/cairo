@@ -30,6 +30,14 @@ impl ExtensionImplementation for MatchNullableExtension {
         _tmpl_args: &Vec<TemplateArg>,
         _registry: &TypeRegistry,
     ) -> Result<Vec<Effects>, Error> {
+        Ok(vec![Effects::none(), Effects::none()])
+    }
+
+    fn resource_usages(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<Vec<ResourceMap>, Error> {
         Ok(vec![gas_usage(1), gas_usage(1)])
     }
 

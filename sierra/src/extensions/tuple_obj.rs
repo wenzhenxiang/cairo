@@ -47,6 +47,14 @@ impl NonBranchImplementation for TuplePackExtension {
         Ok(Effects::none())
     }
 
+    fn resource_usages(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<ResourceMap, Error> {
+        Ok(ResourceMap::new())
+    }
+
     fn exec(
         self: &Self,
         tmpl_args: &Vec<TemplateArg>,
@@ -117,6 +125,14 @@ impl NonBranchImplementation for TupleUnpackExtension {
         _registry: &TypeRegistry,
     ) -> Result<Effects, Error> {
         Ok(Effects::none())
+    }
+
+    fn resource_usages(
+        self: &Self,
+        _tmpl_args: &Vec<TemplateArg>,
+        _registry: &TypeRegistry,
+    ) -> Result<ResourceMap, Error> {
+        Ok(ResourceMap::new())
     }
 
     fn exec(
