@@ -50,6 +50,7 @@ impl Helper<'_> {
         self: &Self,
         f: &'a Function,
     ) -> Result<BlockBasicInfo<'a>, Error> {
+        // last is the offset of the last argument.
         let mut last = -2;
         let mut vars = VarStates::new();
         f.args.iter().try_for_each(|v| {

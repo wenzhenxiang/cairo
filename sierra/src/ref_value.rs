@@ -27,7 +27,7 @@ pub enum RefValue {
     OpWithConst(MemLocation, Op, i64),
 }
 
-// Merges two adjacent memory locations - will fail if not actually ajacent.
+// Merges two adjacent memory locations - will fail if not actually adjacent.
 pub(crate) fn mem_reducer(
     (loc1, size1): (MemLocation, usize),
     (loc2, size2): (MemLocation, usize),
