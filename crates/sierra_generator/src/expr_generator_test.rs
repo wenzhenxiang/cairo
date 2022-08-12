@@ -1,0 +1,124 @@
+use std::collections::HashMap;
+
+use crate::expr_generator::ExprGenerator;
+use crate::id_allocator::IdAllocator;
+use defs::db::{DefsDatabase, DefsGroup};
+use defs::ids::{LocalVarId, VarId};
+use salsa::{InternId, InternKey};
+use semantic::db::{HirDatabase, SemanticGroup};
+use semantic::ids::{FunctionInstanceId, TypeId};
+use semantic::semantic::{
+    Expr, ExprBlock, ExprFunctionCall, ExprLiteral, ExprMatch, ExprVar, MatchBranch, Pattern,
+    Statement, StatementLet,
+};
+
+#[salsa::database(DefsDatabase, HirDatabase)]
+#[derive(Default)]
+pub struct DatabaseImpl {
+    storage: salsa::Storage<DatabaseImpl>,
+}
+impl salsa::Database for DatabaseImpl {}
+
+#[test]
+fn test_expr_generator() {
+    let db = DatabaseImpl::default();
+
+    let ty = TypeId::from_intern_id(InternId::from(0u32));
+    let literal7 = db.expr(Expr::ExprLiteral(ExprLiteral { value: 7, ty }));
+    let var_x = LocalVarId::from_intern_id(InternId::from(3u32));
+    let var_x_expr = db.expr(Expr::ExprVar(ExprVar { var: VarId::Local(var_x), ty }));
+
+    let statement_let = StatementLet { var: var_x, expr: literal7 };
+    let expr = db.expr(Expr::ExprFunctionCall(ExprFunctionCall {
+        function: FunctionInstanceId::from_intern_id(InternId::from(1u32)),
+        args: vec![var_x_expr, literal7],
+        ty,
+    }));
+    let expr2 = db.expr(Expr::ExprFunctionCall(ExprFunctionCall {
+        function: FunctionInstanceId::from_intern_id(InternId::from(2u32)),
+        args: vec![expr, expr],
+        ty,
+    }));
+
+    let block = db.expr(Expr::ExprBlock(ExprBlock {
+        statements: vec![Statement::Let(statement_let), Statement::Expr(expr)],
+        tail: Some(expr2),
+        ty,
+    }));
+
+    let mut id_allocator = IdAllocator::default();
+    let mut variables: HashMap<LocalVarId, String> = HashMap::new();
+    let mut expr_generator =
+        ExprGenerator { db: &db, id_allocator: &mut id_allocator, variables: &mut variables };
+    assert_eq!(
+        expr_generator.generate_expression_code(block, "x"),
+        vec![
+            // let x = 7;
+            "literal<7>() -> (var0);",
+            // foo(x, 7);
+            "dup(var0) -> (arg2);",
+            "literal<7>() -> (arg3);",
+            "func(arg2, arg3) -> (tmp1);",
+            // foo(foo(x, 7), foo(x, 7))
+            "dup(var0) -> (arg5);",
+            "literal<7>() -> (arg6);",
+            "func(arg5, arg6) -> (arg4);",
+            "dup(var0) -> (arg8);",
+            "literal<7>() -> (arg9);",
+            "func(arg8, arg9) -> (arg7);",
+            "func(arg4, arg7) -> (x);",
+        ]
+    );
+}
+
+#[test]
+fn test_match() {
+    let db = DatabaseImpl::default();
+
+    let ty = TypeId::from_intern_id(InternId::from(0u32));
+    let literal7 = db.expr(Expr::ExprLiteral(ExprLiteral { value: 7, ty }));
+    let var_x = LocalVarId::from_intern_id(InternId::from(3u32));
+    let var_x_expr = db.expr(Expr::ExprVar(ExprVar { var: VarId::Local(var_x), ty }));
+
+    let statement_let = StatementLet { var: var_x, expr: literal7 };
+
+    let branch0 = MatchBranch {
+        pattern: Pattern::Expr(db.expr(Expr::ExprLiteral(ExprLiteral { value: 0, ty }))),
+        block: ExprBlock { statements: vec![], tail: Some(var_x_expr), ty },
+    };
+    let branch_otherwise = MatchBranch {
+        pattern: Pattern::Otherwise,
+        block: ExprBlock { statements: vec![], tail: Some(literal7), ty },
+    };
+    let match_statement = db.expr(Expr::ExprMatch(ExprMatch {
+        expr: var_x_expr,
+        branches: vec![branch0, branch_otherwise],
+        ty,
+    }));
+
+    let block = db.expr(Expr::ExprBlock(ExprBlock {
+        statements: vec![Statement::Let(statement_let)],
+        tail: Some(match_statement),
+        ty,
+    }));
+
+    let mut id_allocator = IdAllocator::default();
+    let mut variables: HashMap<LocalVarId, String> = HashMap::new();
+    let mut expr_generator =
+        ExprGenerator { db: &db, id_allocator: &mut id_allocator, variables: &mut variables };
+    assert_eq!(
+        expr_generator.generate_expression_code(block, "x"),
+        vec![
+            // let x = 7;
+            "literal<7>() -> (var0);",
+            // match;
+            "dup(var0) -> (match_val1);",
+            "match_zero(match_val1) -> { ??? }",
+            // Branch 0.
+            "dup(var0) -> (x);",
+            "jump ???",
+            // Branch otherwise.
+            "literal<7>() -> (x);",
+        ]
+    );
+}

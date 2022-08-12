@@ -11,8 +11,8 @@ pub enum Statement {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct StatementLet {
-    var: LocalVarId,
-    expr: ExprId,
+    pub var: LocalVarId,
+    pub expr: ExprId,
 }
 
 // Expressions.
@@ -38,49 +38,53 @@ impl Expr {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ExprBlock {
-    statements: Vec<Statement>,
+    pub statements: Vec<Statement>,
     // Blocks may end with an expression, without a trailing `;`.
     // In this case, `tail` will be Some(expr) with that expression.
     // The block expression will evaluate to this tail expression.
     // Otherwise, this will be None.
-    tail: Option<ExprId>,
-    ty: TypeId,
+    pub tail: Option<ExprId>,
+    pub ty: TypeId,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ExprFunctionCall {
-    function: FunctionInstanceId,
-    args: Vec<ExprId>,
-    ty: TypeId,
+    pub function: FunctionInstanceId,
+    pub args: Vec<ExprId>,
+    pub ty: TypeId,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ExprMatch {
-    expr: ExprId,
-    branches: Vec<MatchBranch>,
-    ty: TypeId,
+    pub expr: ExprId,
+    pub branches: Vec<MatchBranch>,
+    pub ty: TypeId,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MatchBranch {
-    pattern: Pattern,
-    block: ExprBlock,
+    pub pattern: Pattern,
+    pub block: ExprBlock,
 }
 
-// TODO(spapini): Implement a semantic structure for `Pattern`.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Pattern {}
+pub enum Pattern {
+    Otherwise,
+    // TODO(lior): Should this be constant expression?
+    Expr(ExprId),
+}
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ExprVar {
-    var: VarId,
-    ty: TypeId,
+    pub var: VarId,
+    pub ty: TypeId,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ExprLiteral {
-    // TODO(spapini): Literal value.
-    ty: TypeId,
+    // TODO(spapini): Fix the type of `value`.
+    pub value: usize,
+    pub ty: TypeId,
 }
 
 // Items.

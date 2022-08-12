@@ -19,5 +19,5 @@ pub trait DefsGroup {
     #[salsa::interned]
     fn intern_block(&self, id: BlockLongId) -> BlockId;
     #[salsa::interned]
-    fn intern_let_var(&self, id: LocalVarLongId) -> LocalVarId;
+    fn intern_local_var(&self, id: LocalVarLongId) -> LocalVarId;
 }
