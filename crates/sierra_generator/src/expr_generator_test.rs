@@ -50,25 +50,33 @@ fn test_expr_generator() {
     let mut variables: HashMap<LocalVarId, String> = HashMap::new();
     let mut expr_generator =
         ExprGenerator { db: &db, id_allocator: &mut id_allocator, variables: &mut variables };
+    let (instructions, res) = expr_generator.generate_expression_code(block);
     assert_eq!(
-        expr_generator.generate_expression_code(block, "x"),
+        instructions,
         vec![
             // let x = 7;
-            "literal<7>() -> (var0);",
+            "literal<7>() -> (literal0);",
             // foo(x, 7);
-            "dup(var0) -> (arg2);",
-            "literal<7>() -> (arg3);",
-            "func(arg2, arg3) -> (tmp1);",
+            "literal<7>() -> (literal1);",
+            "store_temp(literal0) -> (arg2);",
+            "store_temp(literal1) -> (arg3);",
+            "func(arg2, arg3) -> (tmp4);",
             // foo(foo(x, 7), foo(x, 7))
-            "dup(var0) -> (arg5);",
-            "literal<7>() -> (arg6);",
-            "func(arg5, arg6) -> (arg4);",
-            "dup(var0) -> (arg8);",
-            "literal<7>() -> (arg9);",
-            "func(arg8, arg9) -> (arg7);",
-            "func(arg4, arg7) -> (x);",
+            "literal<7>() -> (literal5);",
+            "store_temp(literal0) -> (arg6);",
+            "store_temp(literal5) -> (arg7);",
+            "func(arg6, arg7) -> (tmp8);",
+            "literal<7>() -> (literal9);",
+            "store_temp(literal0) -> (arg10);",
+            "store_temp(literal9) -> (arg11);",
+            "func(arg10, arg11) -> (tmp12);",
+            "store_temp(tmp8) -> (arg13);",
+            "store_temp(tmp12) -> (arg14);",
+            "func(arg13, arg14) -> (tmp15);",
         ]
     );
+
+    assert_eq!(res, "tmp15");
 }
 
 #[test]
@@ -106,19 +114,22 @@ fn test_match() {
     let mut variables: HashMap<LocalVarId, String> = HashMap::new();
     let mut expr_generator =
         ExprGenerator { db: &db, id_allocator: &mut id_allocator, variables: &mut variables };
+    let (instructions, res) = expr_generator.generate_expression_code(block);
     assert_eq!(
-        expr_generator.generate_expression_code(block, "x"),
+        instructions,
         vec![
             // let x = 7;
-            "literal<7>() -> (var0);",
+            "literal<7>() -> (literal0);",
             // match;
-            "dup(var0) -> (match_val1);",
-            "match_zero(match_val1) -> { ??? }",
+            "match_zero(literal0) -> { ??? };",
             // Branch 0.
-            "dup(var0) -> (x);",
-            "jump ???",
+            "store_temp(literal0) -> (match_res1);",
+            "jump ???;",
             // Branch otherwise.
-            "literal<7>() -> (x);",
+            "literal<7>() -> (literal2);",
+            "store_temp(literal2) -> (match_res1);",
         ]
     );
+
+    assert_eq!(res, "match_res1");
 }
