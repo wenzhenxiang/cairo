@@ -1,4 +1,3 @@
-
 pub struct IdAllocator {
     next_id: u64,
 }
@@ -7,9 +6,9 @@ impl IdAllocator {
         Self { next_id: 0 }
     }
 
-    pub fn allocate(self: &mut Self, prefix: &str) -> String {
+    pub fn allocate(self: &mut Self) -> u64 {
         let cur_id = self.next_id;
         self.next_id += 1;
-        return format!("{}{}", prefix, cur_id);
+        return cur_id;
     }
 }
