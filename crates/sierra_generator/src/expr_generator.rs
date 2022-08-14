@@ -4,9 +4,9 @@ use ::semantic::semantic;
 
 use crate::expr_generator_context::{ExprGeneratorContext, SierraVariable};
 
-// Generates Sierra code that computes a given expression.
-// Returns a list of Sierra instructions and the Sierra variable in which the result
-// is stored.
+/// Generates Sierra code that computes a given expression.
+/// Returns a list of Sierra instructions and the Sierra variable in which the result
+/// is stored.
 pub fn generate_expression_code(
     context: &mut ExprGeneratorContext,
     x: ExprId,
@@ -37,6 +37,7 @@ fn generate_expression_code_by_val(
     }
 }
 
+/// Generates Sierra code for [semantic::ExprBlock].
 fn handle_block(
     context: &mut ExprGeneratorContext,
     expr_block: &semantic::ExprBlock,
@@ -70,6 +71,7 @@ fn handle_block(
     }
 }
 
+/// Generates Sierra code for [semantic::ExprFunctionCall].
 fn handle_function_call(
     context: &mut ExprGeneratorContext,
     expr_function_call: &semantic::ExprFunctionCall,
@@ -92,6 +94,8 @@ fn handle_function_call(
     return (instructions, tmp_var);
 }
 
+/// Generates Sierra code for [semantic::ExprMatch].
+/// Currently only a simple match-zero is supported.
 fn handle_felt_match(
     context: &mut ExprGeneratorContext,
     expr_match: &semantic::ExprMatch,
@@ -107,6 +111,7 @@ fn handle_felt_match(
             {
                 expr_literal
             } else {
+                // TOOD(lior): Replace with diagnostics.
                 unimplemented!();
             };
 
@@ -123,7 +128,6 @@ fn handle_felt_match(
             // TODO(lior): Replace "???" with statementId.
             instructions.push(format!("match_zero({}) -> {{ ???, fallthrough }};", match_expr_res));
 
-            // TODO(lior): Don't use the same variable manager.
             // TODO(lior): Fix block0.clone().
             let (block0_instructions, block0_res) = generate_expression_code_by_val(
                 context,
