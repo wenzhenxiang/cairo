@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
-use crate::expr_generator::ExprGenerator;
-use crate::id_allocator::IdAllocator;
-use defs::db::{DefsDatabase, DefsGroup};
+use defs::db::DefsDatabase;
 use defs::ids::{LocalVarId, VarId};
+use pretty_assertions::assert_eq;
 use salsa::{InternId, InternKey};
 use semantic::db::{HirDatabase, SemanticGroup};
 use semantic::ids::{FunctionInstanceId, TypeId};
@@ -11,6 +10,9 @@ use semantic::semantic::{
     Expr, ExprBlock, ExprFunctionCall, ExprLiteral, ExprMatch, ExprVar, MatchBranch, Pattern,
     Statement, StatementLet,
 };
+
+use crate::expr_generator::{ExprGenerator, SierraVariable};
+use crate::id_allocator::IdAllocator;
 
 #[salsa::database(DefsDatabase, HirDatabase)]
 #[derive(Default)]
@@ -46,10 +48,9 @@ fn test_expr_generator() {
         ty,
     }));
 
-    let mut id_allocator = IdAllocator::default();
-    let mut variables: HashMap<LocalVarId, String> = HashMap::new();
-    let mut expr_generator =
-        ExprGenerator { db: &db, id_allocator: &mut id_allocator, variables: &mut variables };
+    let id_allocator = IdAllocator::default();
+    let mut variables: HashMap<LocalVarId, SierraVariable> = HashMap::new();
+    let mut expr_generator = ExprGenerator { db: &db, id_allocator, variables: &mut variables };
     let (instructions, res) = expr_generator.generate_expression_code(block);
     assert_eq!(
         instructions,
@@ -76,7 +77,7 @@ fn test_expr_generator() {
         ]
     );
 
-    assert_eq!(res, "tmp15");
+    assert_eq!(res, SierraVariable::from("tmp15"));
 }
 
 #[test]
@@ -110,10 +111,9 @@ fn test_match() {
         ty,
     }));
 
-    let mut id_allocator = IdAllocator::default();
-    let mut variables: HashMap<LocalVarId, String> = HashMap::new();
-    let mut expr_generator =
-        ExprGenerator { db: &db, id_allocator: &mut id_allocator, variables: &mut variables };
+    let id_allocator = IdAllocator::default();
+    let mut variables: HashMap<LocalVarId, SierraVariable> = HashMap::new();
+    let mut expr_generator = ExprGenerator { db: &db, id_allocator, variables: &mut variables };
     let (instructions, res) = expr_generator.generate_expression_code(block);
     assert_eq!(
         instructions,
@@ -121,7 +121,7 @@ fn test_match() {
             // let x = 7;
             "literal<7>() -> (literal0);",
             // match;
-            "match_zero(literal0) -> { ??? };",
+            "match_zero(literal0) -> { ???, fallthrough };",
             // Branch 0.
             "store_temp(literal0) -> (match_res1);",
             "jump ???;",
@@ -131,5 +131,5 @@ fn test_match() {
         ]
     );
 
-    assert_eq!(res, "match_res1");
+    assert_eq!(res, SierraVariable::from("match_res1"));
 }
