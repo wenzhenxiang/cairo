@@ -1,4 +1,4 @@
-use defs::db::DefsGroup;
+use defs::db::{AsDefsGroup, DefsGroup};
 use defs::ids::{
     ExternFunctionLongId, FreeFunctionId, FreeFunctionLongId, ModuleId, ModuleItemId, StructId,
     StructLongId,
@@ -14,7 +14,7 @@ use crate::semantic;
 
 // Salsa database interface.
 #[salsa::query_group(SemanticDatabase)]
-pub trait SemanticGroup: DefsGroup + ParserGroup {
+pub trait SemanticGroup: DefsGroup + AsDefsGroup + ParserGroup {
     #[salsa::interned]
     fn intern_function_instance(&self, id: ConcreteFunctionLongId) -> ConcreteFunctionId;
     #[salsa::interned]
@@ -96,7 +96,7 @@ fn module_file(db: &dyn SemanticGroup, module_id: ModuleId) -> Option<FileId> {
     match module_id {
         ModuleId::CrateRoot(crate_id) => db.crate_root_file(crate_id),
         ModuleId::Submodule(submodule_id) => {
-            let _submodule_long_id = db.lookup_intern_submodule(submodule_id);
+            let _submodule_long_id = db.as_defs_group().lookup_intern_submodule(submodule_id);
             // TODO(yuval): support submodules.
             todo!()
         }

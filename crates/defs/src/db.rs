@@ -23,3 +23,7 @@ pub trait DefsGroup {
     #[salsa::interned]
     fn intern_submodule(&self, id: SubmoduleLongId) -> SubmoduleId;
 }
+
+pub trait AsDefsGroup {
+    fn as_defs_group(&self) -> &(dyn DefsGroup + 'static);
+}
