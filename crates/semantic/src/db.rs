@@ -47,6 +47,10 @@ pub trait SemanticGroup: DefsGroup + AsDefsGroup + ParserGroup + AsFilesGroup {
         &self,
         function_id: GenericFunctionId,
     ) -> WithDiagnostics<Option<semantic::Signature>, Diagnostic>;
+    fn concrete_function_signature_semantic(
+        &self,
+        function_id: ConcreteFunctionId,
+    ) -> WithDiagnostics<Option<semantic::Signature>, Diagnostic>;
 
     /// Returns the semantic function given the function_id.
     fn free_function_semantic(
@@ -112,6 +116,15 @@ fn generic_function_signature_semantic(
 ) -> Option<semantic::Signature> {
     let generic_data = db.generic_function_data(function_id).unwrap(diagnostics)?;
     Some(generic_data.signature)
+}
+
+fn concrete_function_signature_semantic(
+    db: &dyn SemanticGroup,
+    function_id: ConcreteFunctionId,
+) -> WithDiagnostics<Option<semantic::Signature>, Diagnostic> {
+    let generic_function = db.lookup_intern_concrete_function(function_id);
+    // TODO(lior): Replace generic type once generic signatures are implemented.
+    db.generic_function_signature_semantic(generic_function.generic_function)
 }
 
 #[with_diagnostics]
