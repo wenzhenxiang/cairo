@@ -4,6 +4,7 @@ use id_arena::Arena;
 use itertools::zip_eq;
 use semantic::db::SemanticGroup;
 use semantic::TypeLongId;
+use utils::extract_matches;
 use utils::ordered_hash_map::OrderedHashMap;
 use utils::ordered_hash_set::OrderedHashSet;
 
@@ -42,16 +43,20 @@ pub struct Lowered {
 }
 
 /// Scope of a block, describing its current state.
-pub struct BlockScope {
+#[derive(Default)]
+pub struct BlockScope<'a> {
     /// Variables given as input to the current block.
     pub inputs: Vec<VariableId>,
     /// Living variables owned by this scope.
     pub living_variables: OrderedHashSet<VariableId>,
-    /// Mapping from a semantic variable to its lowered variable. Note that there might be
-    /// lowered variables that did not originate from a semantic variable.
+    /// Mapping from a semantic variable to its lowered variable in the current scope.
+    /// Note: there might be lowered variables that did not originate from a semantic variable.
+    /// Note: a semantic variable might have different variables in different scopes, and even
+    /// in the same scope the mapped variable might change (e.g., assignment statement).
     pub semantic_variables: OrderedHashMap<semantic::VarId, VariableId>,
     /// Current sequence of lowered statements emitted.
     pub statements: Vec<Statement>,
+    pub parent_scope: Option<&'a mut BlockScope<'a>>,
 }
 
 impl<'db> Lowerer<'db> {
@@ -69,7 +74,7 @@ impl<'db> Lowerer<'db> {
         let signature = db.free_function_declaration_signature(free_function_id)?;
 
         // Prepare params.
-        let inputs: OrderedHashMap<_, _> = signature
+        let semantic_variables: OrderedHashMap<_, _> = signature
             .params
             .iter()
             .map(|param| {
@@ -84,7 +89,18 @@ impl<'db> Lowerer<'db> {
                 )
             })
             .collect();
-        let root = lowerer.lower_block(function_def.body, inputs);
+        let variables: Vec<_> = semantic_variables.values().copied().collect();
+        let mut scope = BlockScope {
+            inputs: variables.clone(),
+            living_variables: variables.iter().copied().collect(),
+            semantic_variables,
+            statements: vec![],
+            parent_scope: None,
+        };
+
+        // Fetch body block expr.
+        let block = extract_matches!(&function_def.exprs[function_def.body], semantic::Expr::Block);
+        let (root, _) = lowerer.lower_block(&block, &mut scope);
         let Lowerer { diagnostics, variables, blocks, .. } = lowerer;
         Some(Lowered { diagnostics: diagnostics.build(), root, variables, blocks })
     }
@@ -92,21 +108,10 @@ impl<'db> Lowerer<'db> {
     // Lowers a semantic block.
     fn lower_block(
         &mut self,
-        block_expr_id: semantic::ExprId,
-        inputs: OrderedHashMap<semantic::VarId, VariableId>,
-    ) -> BlockId {
-        let expr = &self.function_def.exprs[block_expr_id];
-        let expr_block = if let semantic::Expr::Block(expr_block) = expr {
-            expr_block
-        } else {
-            panic!("Expected a block")
-        };
-        let mut scope = BlockScope {
-            inputs: inputs.values().copied().collect(),
-            living_variables: inputs.values().copied().collect(),
-            semantic_variables: inputs,
-            statements: vec![],
-        };
+        expr_block: &semantic::ExprBlock,
+        parent_scope: &mut BlockScope,
+    ) -> (BlockId, Option<VariableId>) {
+        let mut scope = BlockScope { parent_scope: Some(parent_scope), ..BlockScope::default() };
         for (i, stmt_id) in expr_block.statements.iter().enumerate() {
             let stmt = &self.function_def.statements[*stmt_id];
             if let semantic::Statement::Return(expr_id) = stmt {
@@ -135,18 +140,20 @@ impl<'db> Lowerer<'db> {
         &mut self,
         mut scope: BlockScope,
         expr_id: semantic::ExprId,
-    ) -> BlockId {
+    ) -> (BlockId, Option<VariableId>) {
         // First, prepare the expr.
         let var_id = self.lower_expr(&mut scope, expr_id);
         self.take(&mut scope, var_id);
-        let BlockScope { inputs, living_variables, semantic_variables: _, statements } = scope;
+
+        let BlockScope { inputs, living_variables, statements, .. } = scope;
         // TODO(spapini): Find mut function parameters, and return them as well.
-        self.blocks.alloc(Block {
+        let block_id = self.blocks.alloc(Block {
             inputs,
             statements,
             drops: living_variables.into_iter().collect(),
             end: BlockEnd::Return(vec![var_id]),
-        })
+        });
+        (block_id, None)
     }
 
     /// Finalizes lowering of a block that ends regularly, returning to callsite.
@@ -154,20 +161,21 @@ impl<'db> Lowerer<'db> {
         &mut self,
         mut scope: BlockScope,
         expr_id: Option<semantic::ExprId>,
-    ) -> BlockId {
+    ) -> (BlockId, Option<VariableId>) {
         // First, prepare the expr.
-        let extra_vars = expr_id.map(|expr_id| {
+        let expr_var = expr_id.map(|expr_id| {
             let var_id = self.lower_expr(&mut scope, expr_id);
             self.take(&mut scope, var_id)
         });
-        let BlockScope { inputs, living_variables, semantic_variables: _, statements } = scope;
+        let BlockScope { inputs, living_variables, statements, .. } = scope;
         // TODO(spapini): Find mut function parameters, and return them as well.
-        self.blocks.alloc(Block {
+        let block_id = self.blocks.alloc(Block {
             inputs,
             statements,
             drops: living_variables.into_iter().collect(),
-            end: BlockEnd::Callsite(extra_vars.into_iter().collect()),
-        })
+            end: BlockEnd::Callsite(expr_var.into_iter().collect()),
+        });
+        (block_id, expr_var)
     }
 
     /// Lowers a semantic statement.
@@ -237,7 +245,13 @@ impl<'db> Lowerer<'db> {
         match expr {
             semantic::Expr::Tuple(_) => self.new_variable(scope, expr.ty()),
             semantic::Expr::Assignment(_) => todo!(),
-            semantic::Expr::Block(_) => todo!(),
+            semantic::Expr::Block(expr) => {
+                // Need to detect which variables are moved to the block's scope, and should be
+                // passed as inputs.
+                let (_, var_id) = self.lower_block(expr, scope);
+                // TODO(spapini): Handle the other case.
+                var_id.unwrap()
+            }
             semantic::Expr::FunctionCall(expr) => {
                 let inputs = expr
                     .args
