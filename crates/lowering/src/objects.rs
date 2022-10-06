@@ -23,9 +23,6 @@ pub struct Block {
     /// Note: Match is a possible statement, which means it has control flow logic inside, but
     /// after its execution is completed, the flow returns to the following statement of the block.
     pub statements: Vec<Statement>,
-    /// Which variables are needed to be dropped at the end of this block. Note that these are
-    /// not explicitly dropped by statements.
-    pub drops: Vec<VariableId>,
     /// Describes how this block ends: returns to the caller or exits the function.
     pub end: BlockEnd,
 }
@@ -33,12 +30,36 @@ pub struct Block {
 /// Describes what happens to the program flow at the end of a block.
 pub enum BlockEnd {
     /// This block returns to the call-site, outputting variables to the call-site.
-    Callsite(Vec<VariableId>),
+    Callsite(BlockEndCallsite),
     /// This block ends with a `return` statement, exiting the function.
-    Return(Vec<VariableId>),
+    Return(BlockEndReturn),
     /// The last statement ended the flow (e.g., match will all arms ending in return),
     /// and the end of this block is unreachable.
     Unreachable,
+}
+
+impl BlockEnd {
+    pub fn drops(&self) -> Option<&[VariableId]> {
+        match self {
+            BlockEnd::Callsite(end) => Some(&end.drops),
+            BlockEnd::Return(end) => Some(&end.drops),
+            BlockEnd::Unreachable => None,
+        }
+    }
+}
+
+pub struct BlockEndCallsite {
+    pub outputs: Vec<VariableId>,
+    /// Which variables are needed to be dropped at the end of this block. Note that these are
+    /// not explicitly dropped by statements.
+    pub drops: Vec<VariableId>,
+}
+
+pub struct BlockEndReturn {
+    pub returns: Vec<VariableId>,
+    /// Which variables are needed to be dropped at the end of this block. Note that these are
+    /// not explicitly dropped by statements.
+    pub drops: Vec<VariableId>,
 }
 
 /// Lowered variable representation.
@@ -71,7 +92,7 @@ pub enum Statement {
     MatchEnum,
 
     // Tuples.
-    TupleConstruct,
+    TupleConstruct(StatementTupleConstruct),
     TupleDestruct(StatementTupleDestruct),
 }
 impl Statement {
@@ -85,7 +106,7 @@ impl Statement {
             Statement::StructDestruct => todo!(),
             Statement::EnumConstruct => todo!(),
             Statement::MatchEnum => todo!(),
-            Statement::TupleConstruct => todo!(),
+            Statement::TupleConstruct(stmt) => vec![stmt.output],
             Statement::TupleDestruct(stmt) => stmt.outputs.clone(),
         }
     }
@@ -129,6 +150,8 @@ pub struct StatementMatchExtern {
     pub function: semantic::FunctionId,
     /// Living variables in current scope to move to the function, as arguments.
     pub inputs: Vec<VariableId>,
+    /// Living variables in current scope to move to the function, as arguments.
+    pub arm_extra_inputs: Vec<VariableId>,
     // All blocks should have the same rets.
     pub arms: Vec<MatchArm>,
     /// New variables to be introduced into the current scope from the arm outputs.
@@ -138,12 +161,15 @@ pub struct StatementMatchExtern {
 pub struct MatchArm {
     /// New variables to be introduced into the current scope from the branch outputs.
     /// These variables will move and be bound to the callee block inputs, in the same order.
-    /// Note: to have something a bit more complex, like moving extra variables from a higher
-    /// scope, or rearrange the variables, an intermediate block should be constructed with the
-    /// proper calls.
     pub arm_variables: Vec<VariableId>,
     /// A block to "call".
     pub block: BlockId,
+}
+
+/// A statement that constructs a tuple into a new variable.
+pub struct StatementTupleConstruct {
+    pub inputs: Vec<VariableId>,
+    pub output: VariableId,
 }
 
 /// A statement that destructs a tuple, introducing its elements as new variables.

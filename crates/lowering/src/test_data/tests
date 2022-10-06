@@ -34,8 +34,8 @@ Inputs:
 Statements:
   (v1: core::felt, ) <- core::felt_mul(v0, v0, )
   (v2: core::felt, ) <- core::felt_add(v0, v1, )
-End:
-  Return(v2, )
+Drops: 
+End: Return(v2, )
 
 //! > ==========================================================================
 
@@ -62,23 +62,23 @@ foo
 //! > lowering_format
 blk0:
 Inputs:
-  v0: core::felt, 
+  v5: core::felt, 
 Statements:
-  (v2: core::felt, v3: core::felt, ) <- tuple_destruct(v1)
+  (v1: core::felt, v2: core::felt, ) <- tuple_destruct(v0)
   (v4: core::felt, ) <- 5u
-End:
-  Callsite(v4, )
+Drops: 
+End: Callsite(v4, )
 
 //! > ==========================================================================
 
-//! > Test compund expressions.
+//! > Test compound expressions.
 
 //! > test_function_name
 test_function_lowering
 
 //! > function
 func foo(a: felt) -> felt {
-    foo(3) + 5 * a
+    foo(3) + 5 * {3; a+0}
 }
 
 //! > function_name
@@ -93,12 +93,12 @@ foo
 //! > lowering_format
 blk0:
 Inputs:
-  v0: core::felt, 
+  v3: core::felt, 
 Statements:
-  (v1: core::felt, ) <- 3u
-  (v2: core::felt, ) <- test_crate::foo(v1, )
-  (v3: core::felt, ) <- 5u
-  (v4: core::felt, ) <- core::felt_mul(v3, v0, )
-  (v5: core::felt, ) <- core::felt_add(v2, v4, )
-End:
-  Callsite(v5, )
+  (v0: core::felt, ) <- 3u
+  (v1: core::felt, ) <- test_crate::foo(v0, )
+  (v2: core::felt, ) <- 5u
+  (v4: core::felt, ) <- core::felt_mul(v2, v3, )
+  (v5: core::felt, ) <- core::felt_add(v1, v4, )
+Drops: 
+End: Callsite(v5, )

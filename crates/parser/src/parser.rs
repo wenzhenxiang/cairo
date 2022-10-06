@@ -361,6 +361,7 @@ impl<'a> Parser<'a> {
                 // [LbraceAllowed::Forbid].
                 Some(self.expect_parenthesized_expr())
             }
+            SyntaxKind::TerminalLBrace => Some(self.parse_block().into()),
             _ => {
                 // TODO(yuval): report to diagnostics.
                 None

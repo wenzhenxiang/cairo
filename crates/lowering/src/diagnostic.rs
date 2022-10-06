@@ -34,6 +34,12 @@ impl DiagnosticEntry for LoweringDiagnostic {
     fn format(&self, _db: &Self::DbType) -> String {
         match &self.kind {
             LoweringDiagnosticKind::Unreachable { .. } => "Unreachable code".into(),
+            LoweringDiagnosticKind::VariableNotFound { semantic_var } => {
+                "Variable not found!".into()
+            }
+            LoweringDiagnosticKind::DestructNotFound => {
+                "Destruct or Drop not found for living variable.".into()
+            }
         }
     }
 
@@ -54,4 +60,6 @@ impl DiagnosticEntry for LoweringDiagnostic {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum LoweringDiagnosticKind {
     Unreachable { last_statement_ptr: SyntaxStablePtrId },
+    VariableNotFound { semantic_var: semantic::Variable },
+    DestructNotFound,
 }
