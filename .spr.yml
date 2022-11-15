@@ -1,0 +1,9 @@
+githubRepoOwner: spapinistarkware
+githubRepoName: cairo2
+githubHost: github.com
+requireChecks: true
+requireApproval: true
+githubRemote: origin
+githubBranch: master
+remoteBranches: []
+mergeMethod: rebase

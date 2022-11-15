@@ -182,6 +182,10 @@ pub fn maybe_compute_expr_semantic(
         ast::Expr::Block(block_syntax) => compute_expr_block_semantic(ctx, block_syntax),
         ast::Expr::Match(expr_match) => compute_expr_match_semantic(ctx, expr_match),
         ast::Expr::If(expr_if) => compute_expr_if_semantic(ctx, expr_if),
+        ast::Expr::Loop(_) => {
+            ctx.diagnostics.report(syntax, Unsupported);
+            None
+        }
         ast::Expr::Missing(_) => {
             ctx.diagnostics.report(syntax, Unsupported);
             None
@@ -1004,6 +1008,10 @@ pub fn compute_statement_semantic(
                 expr: ctx.exprs.alloc(expr),
                 stable_ptr: syntax.stable_ptr(),
             })
+        }
+        ast::Statement::Break(_) => {
+            ctx.diagnostics.report(&syntax, Unsupported);
+            return None;
         }
         ast::Statement::Missing(_) => todo!(),
     };

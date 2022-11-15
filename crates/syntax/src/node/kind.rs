@@ -20,6 +20,7 @@ pub enum SyntaxKind {
     MatchArms,
     MatchArm,
     ExprIf,
+    ExprLoop,
     ElseClause,
     OptionElseClauseEmpty,
     StructArgExpr,
@@ -45,6 +46,7 @@ pub enum SyntaxKind {
     OptionTerminalSemicolonEmpty,
     StatementExpr,
     StatementReturn,
+    StatementBreak,
     Param,
     ModifierList,
     ParamList,
@@ -105,10 +107,14 @@ pub enum SyntaxKind {
     TerminalLet,
     TokenReturn,
     TerminalReturn,
+    TokenBreak,
+    TerminalBreak,
     TokenMatch,
     TerminalMatch,
     TokenIf,
     TerminalIf,
+    TokenLoop,
+    TerminalLoop,
     TokenElse,
     TerminalElse,
     TokenUse,
@@ -211,8 +217,10 @@ impl SyntaxKind {
                 | SyntaxKind::TerminalOf
                 | SyntaxKind::TerminalLet
                 | SyntaxKind::TerminalReturn
+                | SyntaxKind::TerminalBreak
                 | SyntaxKind::TerminalMatch
                 | SyntaxKind::TerminalIf
+                | SyntaxKind::TerminalLoop
                 | SyntaxKind::TerminalElse
                 | SyntaxKind::TerminalUse
                 | SyntaxKind::TerminalImplicits
@@ -271,8 +279,10 @@ impl SyntaxKind {
                 | SyntaxKind::TokenOf
                 | SyntaxKind::TokenLet
                 | SyntaxKind::TokenReturn
+                | SyntaxKind::TokenBreak
                 | SyntaxKind::TokenMatch
                 | SyntaxKind::TokenIf
+                | SyntaxKind::TokenLoop
                 | SyntaxKind::TokenElse
                 | SyntaxKind::TokenUse
                 | SyntaxKind::TokenImplicits

@@ -31,6 +31,8 @@ fn terminal_kind_to_text(kind: SyntaxKind) -> Vec<&'static str> {
         SyntaxKind::TerminalReturn => vec!["return"],
         SyntaxKind::TerminalMatch => vec!["match"],
         SyntaxKind::TerminalIf => vec!["if"],
+        SyntaxKind::TerminalLoop => vec!["loop"],
+        SyntaxKind::TerminalBreak => vec!["break"],
         SyntaxKind::TerminalElse => vec!["else"],
         SyntaxKind::TerminalUse => vec!["use"],
         SyntaxKind::TerminalAnd => vec!["&"],
@@ -90,6 +92,8 @@ fn terminal_kinds() -> Vec<SyntaxKind> {
         SyntaxKind::TerminalReturn,
         SyntaxKind::TerminalMatch,
         SyntaxKind::TerminalIf,
+        SyntaxKind::TerminalLoop,
+        SyntaxKind::TerminalBreak,
         SyntaxKind::TerminalElse,
         SyntaxKind::TerminalUse,
         SyntaxKind::TerminalAnd,
@@ -178,6 +182,8 @@ fn is_identifier_like(kind: SyntaxKind) -> bool {
             | SyntaxKind::TerminalReturn
             | SyntaxKind::TerminalMatch
             | SyntaxKind::TerminalIf
+            | SyntaxKind::TerminalLoop
+            | SyntaxKind::TerminalBreak
             | SyntaxKind::TerminalElse
             | SyntaxKind::TerminalUse
             | SyntaxKind::TerminalUnderscore
