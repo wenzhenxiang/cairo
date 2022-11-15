@@ -2063,10 +2063,10 @@ pub struct ExprLoop {
 impl ExprLoop {
     pub fn new_green(
         db: &dyn SyntaxGroup,
-        if_kw: TerminalIfGreen,
+        loop_kw: TerminalLoopGreen,
         body: ExprBlockGreen,
     ) -> ExprLoopGreen {
-        let children: Vec<GreenId> = vec![if_kw.0, body.0];
+        let children: Vec<GreenId> = vec![loop_kw.0, body.0];
         let width = children.iter().copied().map(|id| db.lookup_intern_green(id).width()).sum();
         ExprLoopGreen(db.intern_green(GreenNode {
             kind: SyntaxKind::ExprLoop,
@@ -2075,8 +2075,8 @@ impl ExprLoop {
     }
 }
 impl ExprLoop {
-    pub fn if_kw(&self, db: &dyn SyntaxGroup) -> TerminalIf {
-        TerminalIf::from_syntax_node(db, self.children[0].clone())
+    pub fn loop_kw(&self, db: &dyn SyntaxGroup) -> TerminalLoop {
+        TerminalLoop::from_syntax_node(db, self.children[0].clone())
     }
     pub fn body(&self, db: &dyn SyntaxGroup) -> ExprBlock {
         ExprBlock::from_syntax_node(db, self.children[1].clone())
@@ -2099,7 +2099,7 @@ impl TypedSyntaxNode for ExprLoop {
         ExprLoopGreen(db.intern_green(GreenNode {
             kind: SyntaxKind::ExprLoop,
             details: GreenNodeDetails::Node {
-                children: vec![TerminalIf::missing(db).0, ExprBlock::missing(db).0],
+                children: vec![TerminalLoop::missing(db).0, ExprBlock::missing(db).0],
                 width: 0,
             },
         }))
@@ -4671,11 +4671,11 @@ pub struct StatementBreak {
 impl StatementBreak {
     pub fn new_green(
         db: &dyn SyntaxGroup,
-        return_kw: TerminalBreakGreen,
+        break_kw: TerminalBreakGreen,
         expr: ExprGreen,
         semicolon: TerminalSemicolonGreen,
     ) -> StatementBreakGreen {
-        let children: Vec<GreenId> = vec![return_kw.0, expr.0, semicolon.0];
+        let children: Vec<GreenId> = vec![break_kw.0, expr.0, semicolon.0];
         let width = children.iter().copied().map(|id| db.lookup_intern_green(id).width()).sum();
         StatementBreakGreen(db.intern_green(GreenNode {
             kind: SyntaxKind::StatementBreak,
@@ -4684,7 +4684,7 @@ impl StatementBreak {
     }
 }
 impl StatementBreak {
-    pub fn return_kw(&self, db: &dyn SyntaxGroup) -> TerminalBreak {
+    pub fn break_kw(&self, db: &dyn SyntaxGroup) -> TerminalBreak {
         TerminalBreak::from_syntax_node(db, self.children[0].clone())
     }
     pub fn expr(&self, db: &dyn SyntaxGroup) -> Expr {

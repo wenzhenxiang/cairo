@@ -1,0 +1,13 @@
+//! > Test loops
+
+//! > test_function_name
+get_diagnostics
+
+//! > cairo_code
+func f() {
+    let x = loop {
+        break 5;
+    };
+}
+
+//! > expected_diagnostics
