@@ -4,7 +4,7 @@ use casm::instructions::Instruction;
 use casm::operand::{CellRef, Register};
 use itertools::zip_eq;
 use sierra::extensions::core::CoreConcreteLibFunc;
-use sierra::extensions::lib_func::{BranchSignature, SierraApChange};
+use sierra::extensions::lib_func::{self, BranchSignature, SierraApChange};
 use sierra::extensions::{ConcreteLibFunc, OutputVarReferenceInfo};
 use sierra::ids::ConcreteTypeId;
 use sierra::program::{Invocation, StatementIdx};
@@ -19,6 +19,7 @@ use crate::type_sizes::TypeSizeMap;
 
 mod array;
 mod boxing;
+mod dict;
 mod enm;
 mod felt;
 mod function_call;
@@ -229,6 +230,7 @@ pub fn compile_invocation(
         CoreConcreteLibFunc::Box(libfunc) => boxing::build(libfunc, builder),
         CoreConcreteLibFunc::Enum(libfunc) => enm::build(libfunc, builder),
         CoreConcreteLibFunc::Struct(libfunc) => strct::build(libfunc, builder),
+        CoreConcreteLibFunc::Dict(libfunc) => dict::build(libfunc, builder),
     }
 }
 
