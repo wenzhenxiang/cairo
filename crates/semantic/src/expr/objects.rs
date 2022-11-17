@@ -86,6 +86,7 @@ pub enum Expr {
     Tuple(ExprTuple),
     Assignment(ExprAssignment),
     Block(ExprBlock),
+    Loop(ExprLoop),
     FunctionCall(ExprFunctionCall),
     Match(ExprMatch),
     If(ExprIf),
@@ -102,6 +103,7 @@ impl Expr {
             Expr::Tuple(expr) => expr.ty,
             Expr::Assignment(expr) => expr.ty,
             Expr::Block(expr) => expr.ty,
+            Expr::Loop(expr) => expr.ty,
             Expr::FunctionCall(expr) => expr.ty,
             Expr::Match(expr) => expr.ty,
             Expr::If(expr) => expr.ty,
@@ -118,6 +120,7 @@ impl Expr {
             Expr::Assignment(expr) => expr.stable_ptr,
             Expr::Tuple(expr) => expr.stable_ptr,
             Expr::Block(expr) => expr.stable_ptr,
+            Expr::Loop(expr) => expr.stable_ptr,
             Expr::FunctionCall(expr) => expr.stable_ptr,
             Expr::Match(expr) => expr.stable_ptr,
             Expr::If(expr) => expr.stable_ptr,
@@ -149,6 +152,15 @@ pub struct ExprBlock {
     /// The block expression will evaluate to this tail expression.
     /// Otherwise, this will be None.
     pub tail: Option<ExprId>,
+    pub ty: semantic::TypeId,
+    #[hide_field_debug_with_db]
+    pub stable_ptr: ast::ExprPtr,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, DebugWithDb)]
+#[debug_db(ExprFormatter<'_>)]
+pub struct ExprLoop {
+    pub body: ExprBlock,
     pub ty: semantic::TypeId,
     #[hide_field_debug_with_db]
     pub stable_ptr: ast::ExprPtr,

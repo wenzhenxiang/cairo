@@ -131,6 +131,13 @@ impl DiagnosticEntry for SemanticDiagnostic {
                     block_else_ty.format(db),
                 )
             }
+            SemanticDiagnosticKind::IncompatibleLoopBreakTypes { current_ty, break_ty } => {
+                format!(
+                    r#"Loop has incompatible return types: "{}" and "{}""#,
+                    current_ty.format(db),
+                    break_ty.format(db),
+                )
+            }
             SemanticDiagnosticKind::TypeHasNoMembers { ty, member_name: _ } => {
                 format!(r#"Type "{}" has no members."#, ty.format(db))
             }
@@ -250,6 +257,7 @@ pub enum SemanticDiagnosticKind {
     ParamNameRedefinition { function_id: GenericFunctionId, param_name: SmolStr },
     IncompatibleMatchArms { match_ty: semantic::TypeId, arm_ty: semantic::TypeId },
     IncompatibleIfBlockTypes { block_if_ty: semantic::TypeId, block_else_ty: semantic::TypeId },
+    IncompatibleLoopBreakTypes { current_ty: semantic::TypeId, break_ty: semantic::TypeId },
     TypeHasNoMembers { ty: semantic::TypeId, member_name: SmolStr },
     NoSuchMember { struct_id: StructId, member_name: SmolStr },
     NoSuchVariant { enum_id: EnumId, variant_name: SmolStr },
