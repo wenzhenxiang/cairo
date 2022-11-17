@@ -52,9 +52,9 @@ pub trait TopLevelLanguageElementId: LanguageElementId {
 /// Gets an optional parameter `name`. If specified, implements the Named trait using a key_field
 /// with this name. See the documentation of 'define_short_id' and `stable_ptr.rs` for more details.
 macro_rules! define_language_element_id {
-    ($short_id:ident, $long_id:ident, $ast_ty:ty, $lookup:ident $(,$name:ident)?) => {
+    ($short_id:ident, $long_id:ident, $parent_ty:ident, $ast_ty:ty, $lookup:ident $(,$name:ident)?) => {
         #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-        pub struct $long_id(pub ModuleId, pub <$ast_ty as TypedSyntaxNode>::StablePtr);
+        pub struct $long_id(pub $parent_ty, pub <$ast_ty as TypedSyntaxNode>::StablePtr);
         $(
             impl $long_id {
                 pub fn $name(&self, db: &dyn DefsGroup) -> SmolStr {
@@ -261,14 +261,16 @@ define_language_element_id_as_enum! {
 define_language_element_id!(
     SubmoduleId,
     SubmoduleLongId,
+    ModuleId,
     ast::ItemModule,
     lookup_intern_submodule,
     name
 );
-define_language_element_id!(UseId, UseLongId, ast::ItemUse, lookup_intern_use, name);
+define_language_element_id!(UseId, UseLongId, ModuleId, ast::ItemUse, lookup_intern_use, name);
 define_language_element_id!(
     FreeFunctionId,
     FreeFunctionLongId,
+    ModuleId,
     ast::ItemFreeFunction,
     lookup_intern_free_function,
     name
@@ -287,26 +289,56 @@ impl Ord for FreeFunctionId {
 define_language_element_id!(
     ExternFunctionId,
     ExternFunctionLongId,
+    ModuleId,
     ast::ItemExternFunction,
     lookup_intern_extern_function,
     name
 );
-define_language_element_id!(StructId, StructLongId, ast::ItemStruct, lookup_intern_struct, name);
-define_language_element_id!(EnumId, EnumLongId, ast::ItemEnum, lookup_intern_enum, name);
+define_language_element_id!(
+    StructId,
+    StructLongId,
+    ModuleId,
+    ast::ItemStruct,
+    lookup_intern_struct,
+    name
+);
+define_language_element_id!(EnumId, EnumLongId, ModuleId, ast::ItemEnum, lookup_intern_enum, name);
 define_language_element_id!(
     ExternTypeId,
     ExternTypeLongId,
+    ModuleId,
     ast::ItemExternType,
     lookup_intern_extern_type,
     name
 );
-define_language_element_id!(TraitId, TraitLongId, ast::ItemTrait, lookup_intern_trait, name);
-define_language_element_id!(ImplId, ImplLongId, ast::ItemImpl, lookup_intern_impl, name);
+define_language_element_id!(
+    TraitId,
+    TraitLongId,
+    ModuleId,
+    ast::ItemTrait,
+    lookup_intern_trait,
+    name
+);
+define_language_element_id!(ImplId, ImplLongId, ModuleId, ast::ItemImpl, lookup_intern_impl, name);
 
 // Struct items.
 // TODO(spapini): Override full_path for to include parents, for better debug.
-define_language_element_id!(MemberId, MemberLongId, ast::Member, lookup_intern_member, name);
-define_language_element_id!(VariantId, VariantLongId, ast::Member, lookup_intern_variant, name);
+define_language_element_id!(
+    MemberId,
+    MemberLongId,
+    ModuleId,
+    ast::Member,
+    lookup_intern_member,
+    name
+);
+define_language_element_id!(
+    VariantId,
+    VariantLongId,
+    ModuleId,
+    ast::Member,
+    lookup_intern_variant,
+    name
+);
 
 define_language_element_id_as_enum! {
     /// Id for any variable definition.
@@ -318,10 +350,11 @@ define_language_element_id_as_enum! {
 }
 
 // TODO(spapini): Override full_path for to include parents, for better debug.
-define_language_element_id!(ParamId, ParamLongId, ast::Param, lookup_intern_param, name);
+define_language_element_id!(ParamId, ParamLongId, ModuleId, ast::Param, lookup_intern_param, name);
 define_language_element_id!(
     GenericParamId,
     GenericParamLongId,
+    ModuleId,
     ast::GenericParam,
     lookup_intern_generic_param,
     name
@@ -331,6 +364,7 @@ define_language_element_id!(
 define_language_element_id!(
     LocalVarId,
     LocalVarLongId,
+    ModuleId,
     ast::TerminalIdentifier,
     lookup_intern_local_var
 );
