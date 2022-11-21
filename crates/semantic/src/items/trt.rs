@@ -166,7 +166,7 @@ pub fn priv_trait_function_data(
         module_id,
         &function_syntax.generic_params(db.upcast()),
     );
-    let mut resolver = Resolver::new(db, module_id, &generic_params);
+    let mut resolver = Resolver::new(db, Some(module_id), &generic_params);
     let syntax_db = db.upcast();
     let signature_syntax = function_syntax.signature(syntax_db);
     let return_type =

@@ -127,7 +127,7 @@ impl ResolvedLookback {
 pub struct Resolver<'db> {
     db: &'db dyn SemanticGroup,
     // Current module in which to resolve the path.
-    pub module_id: ModuleId,
+    pub module_id: Option<ModuleId>,
     // Generic parameters accessible to the resolver.
     generic_params: UnorderedHashMap<SmolStr, GenericParamId>,
     // Lookback map for resolved identifiers in path. Used in "Go to definition".
@@ -136,7 +136,7 @@ pub struct Resolver<'db> {
 impl<'db> Resolver<'db> {
     pub fn new(
         db: &'db dyn SemanticGroup,
-        module_id: ModuleId,
+        module_id: Option<ModuleId>,
         generic_params: &[GenericParamId],
     ) -> Self {
         Self {
@@ -498,8 +498,10 @@ impl<'db> Resolver<'db> {
         let ident = identifier.text(syntax_db);
 
         // If an item with this name is found inside the current module, use the current module.
-        if self.db.module_item_by_name(self.module_id, ident.clone()).is_some() {
-            return Some(self.module_id);
+        if let Some(module_id) = self.module_id {
+            if self.db.module_item_by_name(module_id, ident.clone()).is_some() {
+                return Some(module_id);
+            }
         }
 
         // If the first segment is a name of a crate, use the crate's root module as the base

@@ -96,7 +96,7 @@ pub fn priv_enum_semantic_data(db: &dyn SemanticGroup, enum_id: EnumId) -> Optio
         module_id,
         &enum_ast.generic_params(db.upcast()),
     );
-    let mut resolver = Resolver::new(db, module_id, &generic_params);
+    let mut resolver = Resolver::new(db, Some(module_id), &generic_params);
 
     // Variants.
     let mut variants = OrderedHashMap::default();

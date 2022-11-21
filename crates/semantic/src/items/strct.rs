@@ -77,7 +77,7 @@ pub fn priv_struct_semantic_data(
         module_id,
         &struct_ast.generic_params(db.upcast()),
     );
-    let mut resolver = Resolver::new(db, module_id, &generic_params);
+    let mut resolver = Resolver::new(db, Some(module_id), &generic_params);
 
     // Members.
     let mut members = OrderedHashMap::default();

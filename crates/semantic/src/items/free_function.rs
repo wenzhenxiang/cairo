@@ -106,7 +106,7 @@ pub fn priv_free_function_declaration_data(
         module_id,
         &function_syntax.generic_params(db.upcast()),
     );
-    let mut resolver = Resolver::new(db, module_id, &generic_params);
+    let mut resolver = Resolver::new(db, Some(module_id), &generic_params);
     let mut environment = Environment::default();
 
     let syntax_db = db.upcast();
@@ -230,12 +230,13 @@ pub fn priv_free_function_definition_data(
     let syntax = module_data.free_functions.get(&free_function_id)?.clone();
     // Compute signature semantic.
     let declaration = db.priv_free_function_declaration_data(free_function_id)?;
-    let resolver = Resolver::new(db, module_id, &declaration.generic_params);
+    let resolver = Resolver::new(db, Some(module_id), &declaration.generic_params);
     let environment = declaration.environment;
     // Compute body semantic expr.
     let mut ctx = ComputationContext::new(
         db,
         &mut diagnostics,
+        module_id,
         resolver,
         declaration.signature.return_type,
         environment,

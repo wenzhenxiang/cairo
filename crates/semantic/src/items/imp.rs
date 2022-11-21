@@ -88,7 +88,7 @@ pub fn priv_impl_declaration_data(
         module_id,
         &impl_ast.generic_params(syntax_db),
     );
-    let mut resolver = Resolver::new(db, module_id, &generic_params);
+    let mut resolver = Resolver::new(db, Some(module_id), &generic_params);
 
     let trait_path_syntax = impl_ast.trait_path(syntax_db);
     let concrete_trait = resolver
@@ -403,7 +403,7 @@ pub fn priv_impl_function_declaration_data(
         module_id,
         &function_syntax.generic_params(db.upcast()),
     );
-    let mut resolver = Resolver::new(db, module_id, &generic_params);
+    let mut resolver = Resolver::new(db, Some(module_id), &generic_params);
     let syntax_db = db.upcast();
     let signature_syntax = function_syntax.signature(syntax_db);
     let return_type =

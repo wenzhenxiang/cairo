@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use ast::{BinaryOperator, PathSegment};
-use defs::ids::{GenericFunctionId, LocalVarLongId, MemberId};
+use defs::ids::{GenericFunctionId, LocalVarLongId, MemberId, ModuleId};
 use id_arena::Arena;
 use itertools::zip_eq;
 use num_bigint::BigInt;
@@ -43,6 +43,7 @@ use crate::{Mutability, Parameter, PatternStruct};
 pub struct ComputationContext<'ctx> {
     pub db: &'ctx dyn SemanticGroup,
     pub diagnostics: &'ctx mut SemanticDiagnostics,
+    module_id: ModuleId,
     pub resolver: Resolver<'ctx>,
     return_ty: TypeId,
     environment: Box<Environment>,
@@ -55,6 +56,7 @@ impl<'ctx> ComputationContext<'ctx> {
     pub fn new(
         db: &'ctx dyn SemanticGroup,
         diagnostics: &'ctx mut SemanticDiagnostics,
+        module_id: ModuleId,
         resolver: Resolver<'ctx>,
         return_ty: TypeId,
         environment: Environment,
@@ -69,6 +71,7 @@ impl<'ctx> ComputationContext<'ctx> {
         Self {
             db,
             diagnostics,
+            module_id,
             resolver,
             return_ty,
             environment: Box::new(environment),
@@ -693,8 +696,7 @@ fn create_variable_pattern(
     ty: TypeId,
 ) -> Pattern {
     let syntax_db = ctx.db.upcast();
-    let var_id =
-        ctx.db.intern_local_var(LocalVarLongId(ctx.resolver.module_id, identifier.stable_ptr()));
+    let var_id = ctx.db.intern_local_var(LocalVarLongId(ctx.module_id, identifier.stable_ptr()));
 
     let is_mut = match compute_mutability(ctx.diagnostics, syntax_db, modifier_list) {
         Mutability::Immutable => false,

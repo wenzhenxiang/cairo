@@ -4,7 +4,10 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+compiler = { path = "../compiler" }
 defs = { path = "../defs" }
+filesystem = { path = "../filesystem" }
+parser = { path = "../parser" }
 semantic = { path = "../semantic" }
 serde.workspace = true
 serde_json.workspace = true

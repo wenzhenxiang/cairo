@@ -57,16 +57,15 @@ pub struct Parser<'a> {
 
 const MAX_PRECEDENCE: usize = 10;
 impl<'a> Parser<'a> {
-    /// Parses a file.
-    pub fn parse_file(
+    pub fn new(
         db: &'a dyn SyntaxGroup,
-        diagnostics: &mut DiagnosticsBuilder<ParserDiagnostic>,
+        diagnostics: &'a mut DiagnosticsBuilder<ParserDiagnostic>,
         file_id: FileId,
         text: &'a str,
-    ) -> SyntaxFile {
+    ) -> Self {
         let mut lexer = Lexer::from_text(db, file_id, text);
         let next_terminal = lexer.next().unwrap();
-        let parser = Parser {
+        Self {
             db,
             file_id,
             lexer,
@@ -76,7 +75,17 @@ impl<'a> Parser<'a> {
             current_width: 0,
             last_trivia_length: 0,
             diagnostics,
-        };
+        }
+    }
+
+    /// Parses a file.
+    pub fn parse_file(
+        db: &'a dyn SyntaxGroup,
+        diagnostics: &'a mut DiagnosticsBuilder<ParserDiagnostic>,
+        file_id: FileId,
+        text: &'a str,
+    ) -> SyntaxFile {
+        let parser = Self::new(db, diagnostics, file_id, text);
         let green = parser.parse_syntax_file();
         SyntaxFile::from_syntax_node(db, SyntaxNode::new_root(db, green))
     }

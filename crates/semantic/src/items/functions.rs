@@ -1,6 +1,6 @@
 use db_utils::define_short_id;
 use debug::DebugWithDb;
-use defs::ids::{GenericFunctionId, GenericParamId, ParamLongId};
+use defs::ids::{GenericFunctionId, GenericParamId, LanguageElementId, ModuleId, ParamLongId};
 use diagnostics_proc_macros::DebugWithDb;
 use smol_str::SmolStr;
 use syntax::node::{ast, Terminal, TypedSyntaxNode};
@@ -207,8 +207,14 @@ fn update_env_with_ast_params(
 ) -> Vec<semantic::Parameter> {
     let mut semantic_params = Vec::new();
     for ast_param in ast_params.iter() {
-        let (name, semantic_param) =
-            ast_param_to_semantic(diagnostics, db, resolver, ast_param, implicit_params);
+        let (name, semantic_param) = ast_param_to_semantic(
+            diagnostics,
+            db,
+            function_id.module(db.upcast()),
+            resolver,
+            ast_param,
+            implicit_params,
+        );
         if env.add_param(diagnostics, &name, semantic_param.clone(), ast_param, function_id) {
             semantic_params.push(semantic_param);
         }
@@ -221,6 +227,7 @@ fn update_env_with_ast_params(
 fn ast_param_to_semantic(
     diagnostics: &mut SemanticDiagnostics,
     db: &dyn SemanticGroup,
+    module_id: ModuleId,
     resolver: &mut Resolver<'_>,
     ast_param: &ast::Param,
     implicit_param: bool,
@@ -232,7 +239,7 @@ fn ast_param_to_semantic(
         ast::ParamName::Name(name) => Some(name.text(syntax_db)),
     };
 
-    let id = db.intern_param(ParamLongId(resolver.module_id, ast_param.stable_ptr()));
+    let id = db.intern_param(ParamLongId(module_id, ast_param.stable_ptr()));
     let ty_syntax = ast_param.type_clause(syntax_db).ty(syntax_db);
     let ty = resolve_type(db, diagnostics, resolver, &ty_syntax);
 

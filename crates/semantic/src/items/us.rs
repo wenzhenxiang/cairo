@@ -21,7 +21,7 @@ pub fn priv_use_semantic_data(db: &(dyn SemanticGroup), use_id: UseId) -> Option
     let module_id = use_id.module(db.upcast());
     let mut diagnostics = SemanticDiagnostics::new(module_id);
     // TODO(spapini): Add generic args when they are supported on structs.
-    let mut resolver = Resolver::new(db, module_id, &[]);
+    let mut resolver = Resolver::new(db, Some(module_id), &[]);
     let module_data = db.module_data(module_id)?;
     let use_ast = module_data.uses.get(&use_id)?;
     let syntax_db = db.upcast();

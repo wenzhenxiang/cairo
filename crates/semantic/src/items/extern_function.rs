@@ -82,7 +82,7 @@ pub fn priv_extern_function_declaration_data(
         module_id,
         &function_syntax.generic_params(db.upcast()),
     );
-    let mut resolver = Resolver::new(db, module_id, &generic_params);
+    let mut resolver = Resolver::new(db, Some(module_id), &generic_params);
     let mut environment = Environment::default();
     let signature_syntax = function_syntax.signature(db.upcast());
     let return_type =
