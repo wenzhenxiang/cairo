@@ -10,7 +10,7 @@ use defs::ids::{
 use diagnostics::{DiagnosticEntry, DiagnosticLocation, Diagnostics, DiagnosticsBuilder};
 use smol_str::SmolStr;
 use syntax::node::ids::SyntaxStablePtrId;
-use syntax::node::TypedSyntaxNode;
+use syntax::node::{ast, TypedSyntaxNode};
 
 use crate::db::SemanticGroup;
 use crate::semantic;
@@ -97,6 +97,10 @@ impl DiagnosticEntry for SemanticDiagnostic {
             }
             SemanticDiagnosticKind::ExpectedConcreteVariant => {
                 "Expected a concrete variant. Use `::<>` syntax.".to_string()
+            }
+            SemanticDiagnosticKind::ExpectedPath { expr } => {
+                format!("Expected Path, Got: {}.", expr.as_syntax_node().text(db.upcast()).unwrap())
+                    .into()
             }
             SemanticDiagnosticKind::MissingMember { member_name } => {
                 format!(r#"Missing member "{member_name}"."#)
@@ -345,6 +349,9 @@ pub enum SemanticDiagnosticKind {
     MemberSpecifiedMoreThanOnce,
     UseCycle,
     ExpectedConcreteVariant,
+    ExpectedPath {
+        expr: ast::Expr,
+    },
     MissingMember {
         member_name: SmolStr,
     },

@@ -7,9 +7,11 @@ use clap::Parser;
 use compiler::db::RootDatabase;
 use compiler::diagnostics::check_diagnostics;
 use compiler::project::setup_project;
+use itertools::join;
 use sierra_generator::db::SierraGenGroup;
 use sierra_generator::replace_ids::replace_sierra_ids_in_program;
 use starknet::abi;
+use starknet::contract::find_contract_structs;
 use starknet::contract_class::{ContractClass, ContractEntryPoints};
 
 /// Command line args parser.

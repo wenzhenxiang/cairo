@@ -89,7 +89,7 @@ impl<TEntry: DiagnosticEntry> Diagnostics<TEntry> {
     }
 
     /// Same as [Self::expect], except that the diagnostics are formatted.
-    pub fn expect_with_db(&self, db: &TEntry::DbType, error_message: &str) {
+    pub fn expect_with_db<'a>(&self, db: &TEntry::DbType, error_message: &str) {
         assert!(self.0.leaves.is_empty(), "{}\n{}", error_message, self.format(db));
         for subtree in &self.0.subtrees {
             subtree.expect_with_db(db, error_message);

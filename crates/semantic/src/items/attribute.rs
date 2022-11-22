@@ -9,8 +9,8 @@ use crate::db::SemanticGroup;
 /// Semantic representation of an attribute.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Attribute {
-    id: SmolStr,
-    args: Vec<ast::Expr>,
+    pub id: SmolStr,
+    pub args: Vec<ast::Expr>,
 }
 
 impl DebugWithDb<dyn SemanticGroup> for Attribute {
