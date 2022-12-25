@@ -151,7 +151,13 @@ fn generate_key_fields_code() -> rust::Tokens {
                 for (i, member) in members.into_iter().enumerate() {
                     let field_name = member.name;
                     if member.key {
-                        fields.extend(quote! { $("/*") $field_name $("*/") children[$i] });
+                        let key_field = match member.kind {
+                            NodeKind::Struct { members } => quote! { children[$i] },
+                            NodeKind::Terminal { .. } => quote! { children[$i] },
+                            _ => panic!("Unexpected key node kind."),
+                        };
+
+                        fields.extend(quote! { $("/*") $field_name $("*/") $key_field });
                     }
                 }
                 arms.extend(quote! {
