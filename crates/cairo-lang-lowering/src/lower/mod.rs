@@ -26,11 +26,13 @@ use self::variables::LivingVar;
 use crate::db::LoweringGroup;
 use crate::diagnostic::LoweringDiagnosticKind::*;
 use crate::lower::context::LoweringContextBuilder;
+use crate::lower::inline::apply_inlining;
 use crate::StructuredLowered;
 
 pub mod context;
 mod external;
 pub mod implicits;
+pub mod inline;
 mod lower_if;
 mod scope;
 mod semantic_map;
@@ -88,12 +90,16 @@ pub fn lower(db: &dyn LoweringGroup, free_function_id: FreeFunctionId) -> Maybe<
         Err(DiagnosticAdded)
     };
 
-    Ok(StructuredLowered {
+    let structured_lowered = StructuredLowered {
         diagnostics: ctx.diagnostics.build(),
         root,
         variables: ctx.variables,
         blocks: ctx.blocks,
-    })
+    };
+
+    // TODO(ilya): Move inlining to a separate stage.
+
+    Ok(apply_inlining(db, free_function_id, structured_lowered)?)
 }
 
 /// Lowers a semantic block.

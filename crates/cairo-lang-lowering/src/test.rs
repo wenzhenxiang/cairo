@@ -25,6 +25,7 @@ cairo_lang_test_utils::test_file_test!(
         struct_ :"struct",
         tests :"tests",
         tuple :"tuple",
+        inline :"inline",
     },
     test_function_lowering
 );
