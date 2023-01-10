@@ -1,11 +1,10 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 
 use cairo_lang_defs::ids::{FreeFunctionId, LanguageElementId};
 use cairo_lang_utils::ordered_hash_map::OrderedHashMap;
 
 use super::context::{LoweringContext, LoweringContextBuilder};
 use super::StructuredLowered;
-use crate::blocks::{Blocks, StructuredBlocks};
 use crate::db::LoweringGroup;
 use crate::diagnostic::LoweringDiagnosticKind::InliningFailed;
 use crate::lower::Maybe;
@@ -19,8 +18,6 @@ use crate::{
 pub struct InlinerContext<'db> {
     // The LoweringContext were we are building the new blocks.
     ctx: LoweringContext<'db>,
-    block_queue: VecDeque<StructuredBlock>,
-    new_blocks: Blocks<StructuredBlock>,
 }
 
 impl<'db> InlinerContext<'db> {
@@ -52,32 +49,21 @@ impl<'db> InlinerContext<'db> {
         return Ok(statement.clone());
     }
 
-    fn rewrite_blocks(&mut self) -> Maybe<()> {
-        // Iterate block queue (old and new blocks).
-
-        while let Some(block) = self.block_queue.pop_front() {
-            let mut statements = vec![];
-            for stmt in block.statements {
-                statements.push(self.rewrite(&stmt)?);
-            }
-            self.new_blocks.alloc(StructuredBlock {
-                inputs: block.inputs,
-                statements,
-                end: block.end,
-                initial_refs: block.initial_refs,
-            });
-        }
-
-        Ok(())
-    }
-
     /// Inlines a function and returns the StructuredBlock that needs to be called.
     pub fn inline_function(&mut self, free_function_id: FreeFunctionId) -> Maybe<BlockId> {
         let lowered = self.ctx.db.free_function_lowered_structured(free_function_id)?;
         let root_block_id = lowered.root?;
 
-        let mut renamed_vars = HashMap::new();
+        if !lowered.blocks[root_block_id].initial_refs.is_empty() {
+            return Err(self.ctx.diagnostics.report(
+                free_function_id.untyped_stable_ptr(self.ctx.db.upcast()),
+                InliningFailed {
+                    reason: "Cannot inline a function with ref arguments.".to_string(),
+                },
+            ));
+        }
 
+        let mut renamed_vars = HashMap::new();
         let mut renamed_blocks = HashMap::new();
         for (block_id, block) in lowered.blocks.iter() {
             let mut statements = vec![];
@@ -123,11 +109,42 @@ impl<'db> InlinerContext<'db> {
             };
 
             let new_block_block_id = self.ctx.blocks.alloc(new_block);
-
             renamed_blocks.insert(block_id, new_block_block_id);
         }
 
         Ok(renamed_blocks[&root_block_id])
+    }
+
+    fn apply(
+        db: &'db dyn LoweringGroup,
+        free_function_id: FreeFunctionId,
+        structured_lower: StructuredLowered,
+    ) -> Maybe<StructuredLowered> {
+        let lowering_info = LoweringContextBuilder::new(db, free_function_id)?;
+        let mut rewritter = Self { ctx: lowering_info.ctx()? };
+        rewritter.ctx.variables = structured_lower.variables;
+
+        for (_block_id, block) in &structured_lower.blocks {
+            let mut statements = vec![];
+            for stmt in &block.statements {
+                if let Ok(stmt) = rewritter.rewrite(&stmt) {
+                    statements.push(stmt);
+                }
+            }
+            rewritter.ctx.blocks.alloc(StructuredBlock {
+                inputs: block.inputs.clone(),
+                statements,
+                end: block.end.clone(),
+                initial_refs: block.initial_refs.clone(),
+            });
+        }
+
+        Ok(StructuredLowered {
+            diagnostics: rewritter.ctx.diagnostics.build(),
+            root: structured_lower.root,
+            variables: rewritter.ctx.variables,
+            blocks: rewritter.ctx.blocks,
+        })
     }
 }
 
@@ -138,20 +155,7 @@ pub fn apply_inlining(
 ) -> Maybe<StructuredLowered> {
     // let structured_lower = db.free_function_lowered_structured(free_function_id)?;
 
-    let lowering_info = LoweringContextBuilder::new(db, free_function_id)?;
-    let mut ctx = InlinerContext {
-        ctx: lowering_info.ctx()?,
-        block_queue: VecDeque::from(structured_lower.blocks.0.clone()),
-        new_blocks: StructuredBlocks::new(),
-    };
-
-    ctx.rewrite_blocks()?;
-    Ok(StructuredLowered {
-        diagnostics: ctx.ctx.diagnostics.build(),
-        root: structured_lower.root,
-        variables: ctx.ctx.variables,
-        blocks: ctx.new_blocks,
-    })
+    InlinerContext::apply(db, free_function_id, structured_lower)
 }
 
 // fn inline_functions(

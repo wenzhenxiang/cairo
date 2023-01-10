@@ -25,36 +25,21 @@ fn inline_bool_xor(a: bool, b: bool) -> bool implicits() nopanic  {
 //! > lowering_format
 
 //! > lowering_structured
-blk0:
-Inputs: v2: core::bool, v3: core::bool
-Initial refs:
-Statements:
-  (v4: core::bool) <- core::bool_xor_impl(v2, v3)
-End:
-  Callsite(v4)
-
-blk1 (root):
+blk0 (root):
 Inputs: v0: core::bool, v1: core::bool
 Initial refs:
 Statements:
-  (v5: core::bool) <- blk0()
+  (v2: core::bool) <- blk0()
 End:
-  Callsite(v5)
+  Callsite(v2)
 
 //! > lowering_flat
-blk0:
-Inputs: v2: core::bool, v3: core::bool
-Statements:
-  (v4: core::bool) <- core::bool_xor_impl(v2, v3)
-End:
-  Callsite(v4)
-
-blk1 (root):
+blk0 (root):
 Inputs: v0: core::bool, v1: core::bool
 Statements:
-  (v5: core::bool) <- blk0()
+  (v2: core::bool) <- blk0()
 End:
-  Callsite(v5)
+  Callsite(v2)
 
 //! > ==========================================================================
 
@@ -81,9 +66,9 @@ fn bar(ref a: felt) {
 
 //! > lowering_diagnostics
 error: Inlining failed: Cannot inline a function with ref arguments.
- --> lib.cairo:5:3
-  bar(a)
-  ^****^
+ --> lib.cairo:1:1
+#[inline]
+^*******^
 
 //! > lowering_format
 
@@ -119,9 +104,9 @@ fn bar(a: felt) -> felt {
 
 //! > lowering_diagnostics
 error: Inlining failed: Cannot inline a function an early return.
- --> lib.cairo:9:3
-  bar(a)
-  ^****^
+ --> lib.cairo:1:1
+#[inline]
+^*******^
 
 //! > lowering_format
 
