@@ -116,11 +116,9 @@ impl<'db> InlinerContext<'db> {
     }
 
     fn apply(
-        db: &'db dyn LoweringGroup,
-        free_function_id: FreeFunctionId,
+        lowering_info: &'db LoweringContextBuilder<'db>,
         structured_lower: StructuredLowered,
     ) -> Maybe<StructuredLowered> {
-        let lowering_info = LoweringContextBuilder::new(db, free_function_id)?;
         let mut rewritter = Self { ctx: lowering_info.ctx()? };
         rewritter.ctx.variables = structured_lower.variables;
 
@@ -155,7 +153,8 @@ pub fn apply_inlining(
 ) -> Maybe<StructuredLowered> {
     // let structured_lower = db.free_function_lowered_structured(free_function_id)?;
 
-    InlinerContext::apply(db, free_function_id, structured_lower)
+    let lowering_info = LoweringContextBuilder::new(db, free_function_id)?;
+    InlinerContext::apply(&lowering_info, structured_lower)
 }
 
 // fn inline_functions(
