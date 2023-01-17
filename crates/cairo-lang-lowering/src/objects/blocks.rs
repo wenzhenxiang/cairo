@@ -1,10 +1,21 @@
-use std::ops::{Index, IndexMut};
+use std::ops::{Deref, Index, IndexMut};
 
 use super::StructuredBlock;
 use crate::FlatBlock;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BlockId(pub usize);
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PreallocatedBlockId(pub BlockId);
+
+impl Deref for PreallocatedBlockId {
+    type Target = BlockId;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// A convenient wrapper around a vector of blocks.
 /// This is used instead of id_arena, since the latter is harder to clone and modify.
@@ -15,11 +26,21 @@ impl<T> Blocks<T> {
     pub fn new() -> Self {
         Blocks(vec![])
     }
+
     pub fn alloc(&mut self, block: T) -> BlockId {
         let res = BlockId(self.0.len());
         self.0.push(block);
         res
     }
+
+    pub fn preallocate(&mut self) -> PreallocatedBlockId {
+        todo!()
+    }
+
+    pub fn set(&mut self, id: PreallocatedBlockId, block: T) {
+        todo!()
+    }
+
     pub fn iter(&self) -> BlocksIter<'_, T> {
         self.into_iter()
     }

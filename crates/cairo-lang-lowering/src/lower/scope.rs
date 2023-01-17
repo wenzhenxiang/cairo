@@ -6,13 +6,15 @@ use cairo_lang_utils::ordered_hash_set::OrderedHashSet;
 use itertools::chain;
 
 use super::context::{LoweredExpr, LoweringContext, LoweringFlowError, LoweringResult, VarRequest};
+use crate::blocks::PreallocatedBlockId;
 use crate::{
-    BlockId, RefIndex, Statement, StructuredBlock, StructuredBlockEnd, StructuredStatement,
-    VarRemapping, VariableId,
+    BlockId, BranchEnd, EndGoto, RefIndex, Statement, StructuredBlock, StructuredBlockEnd,
+    StructuredStatement, VarRemapping, VariableId,
 };
 
 /// StructuredBlock builder, describing its current state.
 pub struct BlockBuilder {
+    block_id: PreallocatedBlockId,
     /// The variable ids currently bound to the ref variables.
     current_refs: Vec<Option<VariableId>>,
     /// The variable ids bound to the ref variables (including implicits) at the beginning of the
@@ -42,6 +44,7 @@ impl BlockBuilder {
     /// Creates a new [BlockBuilder] for the root block of a function body.
     pub fn root(ctx: &LoweringContext<'_>) -> Self {
         BlockBuilder {
+            block_id: ctx.blocks.preallocate(),
             current_refs: (0..(ctx.implicits.len() + ctx.ref_params.len())).map(|_| None).collect(),
             initial_refs: None,
             inputs: vec![],
@@ -56,8 +59,9 @@ impl BlockBuilder {
     }
 
     /// Creates a [BlockBuilder] for a subscope.
-    pub fn subscope(&self) -> BlockBuilder {
+    pub fn subscope(&self, ctx: &mut LoweringContext<'_>) -> BlockBuilder {
         BlockBuilder {
+            block_id: ctx.blocks.preallocate(),
             current_refs: self.current_refs.clone(),
             initial_refs: None,
             inputs: vec![],
@@ -71,9 +75,13 @@ impl BlockBuilder {
         }
     }
 
+    pub fn block_id(&self) -> BlockId {
+        self.block_id.0
+    }
+
     /// Creates a [BlockBuilder] for a subscope with unchanged refs.
-    pub fn subscope_with_bound_refs(&self) -> BlockBuilder {
-        let mut subscope = self.subscope();
+    pub fn subscope_with_bound_refs(&self, ctx: &mut LoweringContext<'_>) -> BlockBuilder {
+        let mut subscope = self.subscope(ctx);
         subscope.bind_refs();
         subscope
     }
@@ -174,12 +182,12 @@ impl BlockBuilder {
     }
 
     /// Ends a block with Unreachable.
-    pub fn unreachable(self) -> StructuredBlock {
-        self.finalize(StructuredBlockEnd::Unreachable)
+    pub fn unreachable(self, ctx: &mut LoweringContext<'_>) -> BlockId {
+        self.finalize(ctx, StructuredBlockEnd::Branch(BranchEnd::Unreachable))
     }
 
     /// Ends a block with Panic.
-    pub fn panic(self, ctx: &mut LoweringContext<'_>, data: VariableId) -> Maybe<StructuredBlock> {
+    pub fn panic(self, ctx: &mut LoweringContext<'_>, data: VariableId) -> Maybe<BlockId> {
         let implicit_vars = ctx
             .implicits
             .iter()
@@ -194,19 +202,21 @@ impl BlockBuilder {
             .collect::<Option<Vec<_>>>()
             .to_maybe()?;
 
-        Ok(self.finalize(StructuredBlockEnd::Panic {
-            refs: chain!(implicit_vars, ref_vars).collect(),
-            data,
-        }))
+        Ok(self.finalize(
+            ctx,
+            StructuredBlockEnd::Panic { refs: chain!(implicit_vars, ref_vars).collect(), data },
+        ))
     }
 
     /// Ends a block with Callsite.
-    pub fn goto_callsite(self, expr: Option<VariableId>) -> SealedBlockBuilder {
-        SealedBlockBuilder::GotoCallsite { scope: self, expr }
+    pub fn goto(self, ctx: &mut LoweringContext<'_>, expr: Option<VariableId>) -> UnmergedEdge {
+        let block_id =
+            self.finalize(ctx, StructuredBlockEnd::Branch(BranchEnd::Goto(EndGoto::default())));
+        return UnmergedEdge(block_id);
     }
 
     /// Ends a block with Return.
-    pub fn ret(self, ctx: &mut LoweringContext<'_>, expr: VariableId) -> Maybe<StructuredBlock> {
+    pub fn ret(self, ctx: &mut LoweringContext<'_>, expr: VariableId) -> Maybe<BlockId> {
         let implicit_vars = ctx
             .implicits
             .iter()
@@ -221,10 +231,13 @@ impl BlockBuilder {
             .collect::<Option<Vec<_>>>()
             .to_maybe()?;
 
-        Ok(self.finalize(StructuredBlockEnd::Return {
-            refs: chain!(implicit_vars, ref_vars).collect(),
-            returns: vec![expr],
-        }))
+        Ok(self.finalize(
+            ctx,
+            StructuredBlockEnd::Return {
+                refs: chain!(implicit_vars, ref_vars).collect(),
+                returns: vec![expr],
+            },
+        ))
     }
 
     /// Seals a block. This is meant to end a block when not all the information is necessarily
@@ -238,35 +251,28 @@ impl BlockBuilder {
             BlockEndIntent::Callsite(expr) => Ok(self.goto_callsite(expr)),
             BlockEndIntent::Return(expr) => self.ret(ctx, expr).map(From::from),
             BlockEndIntent::Panic(data_var) => self.panic(ctx, data_var).map(From::from),
-            BlockEndIntent::Unreachable => Ok(self.unreachable().into()),
+            BlockEndIntent::Unreachable => Ok(self.unreachable(ctx).into()),
         }
     }
 
     /// Ends a block with known ending information. Used by [SealedBlockBuilder].
-    fn finalize(self, end: StructuredBlockEnd) -> StructuredBlock {
-        StructuredBlock {
+    fn finalize(self, ctx: &mut LoweringContext<'_>, end: StructuredBlockEnd) -> BlockId {
+        let block = StructuredBlock {
             initial_refs: self.initial_refs.expect("References have not been bound yet."),
             inputs: self.inputs,
             statements: self.statements,
             end,
-        }
+        };
+        ctx.blocks.set(self.block_id, block);
+        self.block_id.0
     }
-}
-
-/// Describes how a block ends, with missing information regarding callsite and remapping.
-/// Used for sealing a block, and later finalizing this sealed block to create a
-/// [StructuredBlockEnd].
-pub enum BlockEndIntent {
-    Callsite(Option<VariableId>),
-    Return(VariableId),
-    Panic(VariableId),
-    Unreachable,
 }
 
 /// Remapping of lowered variables with more semantic information regarding what is the semantic
 /// role of the lowered variables.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct SemanticRemapping {
+    target: BlockId,
     expr: Option<VariableId>,
     implicits: OrderedHashMap<semantic::TypeId, VariableId>,
     semantics: OrderedHashMap<semantic::VarId, VariableId>,
@@ -278,11 +284,15 @@ pub enum SealedBlockBuilder {
     /// Block should end by goto callsite. expr may be None for blocks that return the unit type.
     GotoCallsite { scope: BlockBuilder, expr: Option<VariableId> },
     /// Block end is already known.
-    Ends(StructuredBlock),
+    Ends(BlockId),
 }
 impl SealedBlockBuilder {
     /// Given the extra information needed, returns the final StructuredBlock.
-    fn finalize(self, semantic_remapping: &SemanticRemapping) -> StructuredBlock {
+    fn finalize(
+        self,
+        ctx: &mut LoweringContext<'_>,
+        semantic_remapping: &SemanticRemapping,
+    ) -> BlockId {
         match self {
             SealedBlockBuilder::GotoCallsite { scope, expr } => {
                 let mut remapping = VarRemapping::default();
@@ -298,14 +308,17 @@ impl SealedBlockBuilder {
                     assert!(remapping.insert(remapped_var, expr).is_none());
                 }
 
-                scope.finalize(StructuredBlockEnd::Callsite(remapping))
+                scope.finalize(
+                    ctx,
+                    StructuredBlockEnd::Goto { target: semantic_remapping.target, remapping },
+                )
             }
             SealedBlockBuilder::Ends(block) => block,
         }
     }
 }
-impl From<StructuredBlock> for SealedBlockBuilder {
-    fn from(b: StructuredBlock) -> Self {
+impl From<BlockId> for SealedBlockBuilder {
+    fn from(b: BlockId) -> Self {
         SealedBlockBuilder::Ends(b)
     }
 }
@@ -316,24 +329,34 @@ pub struct MergedBlocks {
     pub expr: LoweringResult<LoweredExpr>,
     /// Merged block ids.
     pub blocks: Vec<BlockId>,
+    pub target_scope: BlockBuilder,
 }
+
+pub struct UnmergedEdge(EndGoto);
 
 /// Merges sibling sealed blocks.
 pub fn merge_sealed(
     ctx: &mut LoweringContext<'_>,
     scope: &mut BlockBuilder,
-    sealed_blocks: Vec<SealedBlockBuilder>,
+    blocks: Vec<UnmergedEdge>,
     location: StableLocation,
 ) -> MergedBlocks {
     // TODO(spapini): When adding Gotos, include the callsite target in the required information to
     // merge.
     // TODO(spapini): Don't remap if we have a single reachable branch.
 
-    let mut semantic_remapping = SemanticRemapping::default();
+    let target_scope = scope.subscope(ctx);
+
+    let mut semantic_remapping = SemanticRemapping {
+        target: target_scope.block_id.0,
+        expr: Default::default(),
+        implicits: Default::default(),
+        semantics: Default::default(),
+    };
     let mut n_reachable_blocks = 0;
 
     // Remap Variables from all blocks.
-    for sealed_block in &sealed_blocks {
+    for block in &blocks {
         let SealedBlockBuilder::GotoCallsite { scope: subscope, expr } = sealed_block else {
             continue;
         };
@@ -364,13 +387,7 @@ pub fn merge_sealed(
         }
     }
 
-    let blocks = sealed_blocks
-        .into_iter()
-        .map(|s| {
-            let var = s.finalize(&semantic_remapping);
-            ctx.blocks.alloc(var)
-        })
-        .collect();
+    let blocks = sealed_blocks.into_iter().map(|s| s.finalize(ctx, &semantic_remapping)).collect();
 
     // Apply remapping on scope.
     for (implicit, var) in semantic_remapping.implicits {
@@ -385,5 +402,5 @@ pub fn merge_sealed(
         Some(var) => Ok(LoweredExpr::AtVariable(var)),
         None => Ok(LoweredExpr::Tuple { exprs: vec![], location }),
     };
-    MergedBlocks { expr, blocks }
+    MergedBlocks { expr, blocks, target_scope }
 }

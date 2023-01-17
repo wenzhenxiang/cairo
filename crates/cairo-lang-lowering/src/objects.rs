@@ -95,15 +95,17 @@ impl DerefMut for VarRemapping {
 /// Describes what happens to the program flow at the end of a [`StructuredBlock`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StructuredBlockEnd {
-    /// This block returns to the call-site, remapping variables to the call-site.
-    Callsite(VarRemapping),
     /// This block ends with a `return` statement, exiting the function.
-    Return { refs: Vec<VariableId>, returns: Vec<VariableId> },
+    Return {
+        refs: Vec<VariableId>,
+        returns: Vec<VariableId>,
+    },
     /// This block ends with a `panic` statement, exiting the function.
-    Panic { refs: Vec<VariableId>, data: VariableId },
-    /// The last statement ended the flow (e.g., match will all arms ending in return),
-    /// and the end of this block is unreachable.
-    Unreachable,
+    Panic {
+        refs: Vec<VariableId>,
+        data: VariableId,
+    },
+    Branch(BranchEnd),
 }
 
 /// A block of statements. Unlike [`StructuredBlock`], this has no reference information,
@@ -124,13 +126,48 @@ pub struct FlatBlock {
 /// Describes what happens to the program flow at the end of a [`FlatBlock`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FlatBlockEnd {
-    /// This block returns to the call-site, outputting variables to the call-site.
-    Callsite(VarRemapping),
     /// This block ends with a `return` statement, exiting the function.
     Return(Vec<VariableId>),
-    /// The last statement ended the flow (e.g., match will all arms ending in return),
-    /// and the end of this block is unreachable.
+    Branch(BranchEnd),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BranchEnd {
+    /// This block jumps to another block while remapping variables.
+    Goto(EndGoto),
+    MatchExtern(EndMatchExtern),
+    MatchEnum(EndMatchEnum),
     Unreachable,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EndGoto {
+    target: BlockId,
+    remapping: VarRemapping,
+}
+/// A statement that calls an extern function with branches, and "calls" a possibly different block
+/// for each branch.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EndMatchExtern {
+    // TODO(spapini): ConcreteExternFunctionId once it exists.
+    /// A concrete external function to call.
+    pub function: semantic::FunctionId,
+    /// Living variables in current scope to move to the function, as arguments.
+    pub inputs: Vec<VariableId>,
+    /// Match arms. All blocks should have the same rets.
+    /// Order must be identical to the order in the definition of the enum.
+    pub arms: Vec<EndGoto>,
+}
+
+/// A statement that matches an enum, and "calls" a possibly different block for each branch.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EndMatchEnum {
+    pub concrete_enum_id: ConcreteEnumId,
+    /// A living variable in current scope to match on.
+    pub input: VariableId,
+    /// Match arms. All blocks should have the same rets.
+    /// Order must be identical to the order in the definition of the enum.
+    pub arms: Vec<EndGoto>,
 }
 
 impl TryFrom<StructuredBlock> for FlatBlock {
@@ -150,12 +187,11 @@ impl TryFrom<StructuredBlockEnd> for FlatBlockEnd {
 
     fn try_from(value: StructuredBlockEnd) -> Result<Self, Self::Error> {
         Ok(match value {
-            StructuredBlockEnd::Callsite(vars) => FlatBlockEnd::Callsite(vars),
+            StructuredBlockEnd::Branch(branch) => FlatBlockEnd::Branch(branch),
             StructuredBlockEnd::Return { refs, returns } => {
                 FlatBlockEnd::Return(chain!(refs.iter(), returns.iter()).copied().collect())
             }
             StructuredBlockEnd::Panic { .. } => return Err(()),
-            StructuredBlockEnd::Unreachable => FlatBlockEnd::Unreachable,
         })
     }
 }
@@ -196,8 +232,6 @@ pub enum Statement {
 
     // Flow control.
     Call(StatementCall),
-    CallBlock(StatementCallBlock),
-    MatchExtern(StatementMatchExtern),
 
     // Structs (including tuples).
     StructConstruct(StatementStructConstruct),
@@ -205,31 +239,24 @@ pub enum Statement {
 
     // Enums.
     EnumConstruct(StatementEnumConstruct),
-    MatchEnum(StatementMatchEnum),
 }
 impl Statement {
     pub fn inputs(&self) -> Vec<VariableId> {
         match &self {
             Statement::Literal(_stmt) => vec![],
             Statement::Call(stmt) => stmt.inputs.clone(),
-            Statement::CallBlock(_) => vec![],
-            Statement::MatchExtern(stmt) => stmt.inputs.clone(),
             Statement::StructConstruct(stmt) => stmt.inputs.clone(),
             Statement::StructDestructure(stmt) => vec![stmt.input],
             Statement::EnumConstruct(stmt) => vec![stmt.input],
-            Statement::MatchEnum(stmt) => vec![stmt.input],
         }
     }
     pub fn outputs(&self) -> Vec<VariableId> {
         match &self {
             Statement::Literal(stmt) => vec![stmt.output],
             Statement::Call(stmt) => stmt.outputs.clone(),
-            Statement::CallBlock(_) => vec![],
-            Statement::MatchExtern(_) => vec![],
             Statement::StructConstruct(stmt) => vec![stmt.output],
             Statement::StructDestructure(stmt) => stmt.outputs.clone(),
             Statement::EnumConstruct(stmt) => vec![stmt.output],
-            Statement::MatchEnum(_) => vec![],
         }
     }
 }
@@ -254,28 +281,6 @@ pub struct StatementCall {
     pub outputs: Vec<VariableId>,
 }
 
-/// A statement that jumps to another block. If that block ends with a BlockEnd::CallSite, the flow
-/// returns to the statement following this one.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StatementCallBlock {
-    /// A block to "call".
-    pub block: BlockId,
-}
-
-/// A statement that calls an extern function with branches, and "calls" a possibly different block
-/// for each branch.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StatementMatchExtern {
-    // TODO(spapini): ConcreteExternFunctionId once it exists.
-    /// A concrete external function to call.
-    pub function: semantic::FunctionId,
-    /// Living variables in current scope to move to the function, as arguments.
-    pub inputs: Vec<VariableId>,
-    /// Match arms. All blocks should have the same rets.
-    /// Order must be identical to the order in the definition of the enum.
-    pub arms: Vec<(ConcreteVariant, BlockId)>,
-}
-
 /// A statement that construct a variant of an enum with a single argument, and binds it to a
 /// variable.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -285,17 +290,6 @@ pub struct StatementEnumConstruct {
     pub input: VariableId,
     /// The variable to bind the value to.
     pub output: VariableId,
-}
-
-/// A statement that matches an enum, and "calls" a possibly different block for each branch.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StatementMatchEnum {
-    pub concrete_enum_id: ConcreteEnumId,
-    /// A living variable in current scope to match on.
-    pub input: VariableId,
-    /// Match arms. All blocks should have the same rets.
-    /// Order must be identical to the order in the definition of the enum.
-    pub arms: Vec<(ConcreteVariant, BlockId)>,
 }
 
 /// A statement that constructs a struct (tuple included) into a new variable.

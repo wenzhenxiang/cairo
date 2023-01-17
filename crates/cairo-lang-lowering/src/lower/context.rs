@@ -20,7 +20,7 @@ use crate::db::LoweringGroup;
 use crate::diagnostic::LoweringDiagnostics;
 use crate::lower::external::{extern_facade_expr, extern_facade_return_tys};
 use crate::objects::Variable;
-use crate::{Statement, StatementMatchExtern, VariableId};
+use crate::{Statement, VariableId};
 
 /// Builds a Lowering context.
 pub struct LoweringContextBuilder<'db> {

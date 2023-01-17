@@ -68,7 +68,7 @@ pub fn lower_expr_if_bool(
     let if_location = ctx.get_location(expr.stable_ptr.untyped());
 
     // Main block.
-    let mut subscope_main = scope.subscope_with_bound_refs();
+    let mut subscope_main = scope.subscope_with_bound_refs(ctx);
     let main_block =
         extract_matches!(&ctx.function_body.exprs[expr.if_block], semantic::Expr::Block);
     subscope_main.add_input(
@@ -79,7 +79,7 @@ pub fn lower_expr_if_bool(
         lower_block(ctx, subscope_main, main_block).map_err(LoweringFlowError::Failed)?;
 
     // Else block.
-    let subscope_else = scope.subscope_with_bound_refs();
+    let subscope_else = scope.subscope_with_bound_refs(ctx);
     let block_else =
         lower_optional_else_block(ctx, subscope_else, expr.else_block, if_location, unit_ty)
             .map_err(LoweringFlowError::Failed)?;
@@ -135,7 +135,7 @@ pub fn lower_expr_if_eq(
     let semantic_db = ctx.db.upcast();
 
     // Main block.
-    let subscope_main = scope.subscope_with_bound_refs();
+    let subscope_main = scope.subscope_with_bound_refs(ctx);
     let block_main = lower_block(
         ctx,
         subscope_main,
@@ -145,7 +145,7 @@ pub fn lower_expr_if_eq(
 
     // Else block.
     let non_zero_type = corelib::core_nonzero_ty(semantic_db, corelib::core_felt_ty(semantic_db));
-    let subscope_else = scope.subscope_with_bound_refs();
+    let subscope_else = scope.subscope_with_bound_refs(ctx);
     let block_else =
         lower_optional_else_block(ctx, subscope_else, expr.else_block, if_location, non_zero_type)
             .map_err(LoweringFlowError::Failed)?;

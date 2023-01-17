@@ -78,7 +78,8 @@ pub fn lower(db: &dyn LoweringGroup, function_id: FunctionWithBodyId) -> Maybe<S
     }
     scope.bind_refs();
     let root = if is_empty_semantic_diagnostics {
-        let maybe_sealed_block = lower_block(&mut ctx, scope, semantic_block);
+        let block_expr = lower_block(&mut ctx, &mut scope, semantic_block);
+        let maybe_sealed_block = lowered_expr_to_block_scope_end(&mut ctx, scope, block_expr);
         maybe_sealed_block.and_then(|block_sealed| {
             let block = match block_sealed {
                 SealedBlockBuilder::GotoCallsite { mut scope, expr } => {
@@ -95,7 +96,7 @@ pub fn lower(db: &dyn LoweringGroup, function_id: FunctionWithBodyId) -> Maybe<S
                 }
                 SealedBlockBuilder::Ends(block) => block,
             };
-            Ok(ctx.blocks.alloc(block))
+            Ok(block)
         })
     } else {
         Err(DiagnosticAdded)
@@ -111,13 +112,12 @@ pub fn lower(db: &dyn LoweringGroup, function_id: FunctionWithBodyId) -> Maybe<S
 /// Lowers a semantic block.
 fn lower_block(
     ctx: &mut LoweringContext<'_>,
-    mut scope: BlockBuilder,
+    scope: &mut BlockBuilder,
     expr_block: &semantic::ExprBlock,
-) -> Maybe<SealedBlockBuilder> {
-    log::trace!("Lowering a block.");
+) -> LoweringResult<LoweredExpr> {
     for (i, stmt_id) in expr_block.statements.iter().enumerate() {
         let stmt = &ctx.function_body.statements[*stmt_id];
-        let Err(err) = lower_statement(ctx, &mut scope, stmt) else { continue; };
+        let Err(err) = lower_statement(ctx, scope, stmt) else { continue; };
         if err.is_unreachable() {
             // If flow is not reachable anymore, no need to continue emitting statements.
             // TODO(spapini): We might want to report unreachable for expr that abruptly
@@ -133,16 +133,14 @@ fn lower_block(
                 );
             }
         }
-        return lowering_flow_error_to_sealed_block(ctx, scope, err);
+        return Err(err);
     }
-
     // Determine correct block end.
     let location = ctx.get_location(expr_block.stable_ptr.untyped());
-    let lowered_expr = expr_block
+    expr_block
         .tail
         .map(|expr| lower_expr(ctx, &mut scope, expr))
-        .unwrap_or_else(|| Ok(LoweredExpr::Tuple { exprs: vec![], location }));
-    lowered_expr_to_block_scope_end(ctx, scope, lowered_expr)
+        .unwrap_or_else(|| Ok(LoweredExpr::Tuple { exprs: vec![], location }))
 }
 
 /// Lowers an expression that is either a complete block, or the end (tail expression) of a
@@ -302,7 +300,7 @@ fn lower_expr(
     match expr {
         semantic::Expr::Tuple(expr) => lower_expr_tuple(ctx, expr, scope),
         semantic::Expr::Assignment(expr) => lower_expr_assignment(ctx, expr, scope),
-        semantic::Expr::Block(expr) => lower_expr_block(ctx, scope, expr),
+        semantic::Expr::Block(expr) => lower_block(ctx, scope, expr),
         semantic::Expr::FunctionCall(expr) => lower_expr_function_call(ctx, expr, scope),
         semantic::Expr::Match(expr) => lower_expr_match(ctx, expr, scope),
         semantic::Expr::If(expr) => lower_expr_if(ctx, scope, expr),
@@ -341,26 +339,6 @@ fn lower_expr_tuple(
         .map(|arg_expr_id| lower_expr(ctx, scope, *arg_expr_id))
         .collect::<Result<Vec<_>, _>>()?;
     Ok(LoweredExpr::Tuple { exprs: inputs, location })
-}
-
-/// Lowers an expression of type [semantic::ExprBlock].
-fn lower_expr_block(
-    ctx: &mut LoweringContext<'_>,
-    scope: &mut BlockBuilder,
-    expr: &semantic::ExprBlock,
-) -> LoweringResult<LoweredExpr> {
-    log::trace!("Lowering a block expression: {:?}", expr.debug(&ctx.expr_formatter));
-    let location = ctx.get_location(expr.stable_ptr.untyped());
-
-    let subscope = scope.subscope_with_bound_refs();
-    let block_sealed = lower_block(ctx, subscope, expr).map_err(LoweringFlowError::Failed)?;
-    let merged = merge_sealed(ctx, scope, vec![block_sealed], location);
-
-    // Emit the statement.
-    scope.push_finalized_statement(Statement::CallBlock(StatementCallBlock {
-        block: merged.blocks[0],
-    }));
-    merged.expr
 }
 
 /// Lowers an expression of type [semantic::ExprFunctionCall].
@@ -495,7 +473,7 @@ fn lower_expr_match(
     // Merge arm blocks.
     let sealed_blocks = zip_eq(&concrete_variants, &expr.arms)
         .map(|(concrete_variant, arm)| {
-            let mut subscope = scope.subscope_with_bound_refs();
+            let mut subscope = scope.subscope_with_bound_refs(ctx);
 
             // TODO(spapini): Make a better diagnostic.
             let enum_pattern = try_extract_matches!(&arm.pattern, semantic::Pattern::EnumVariant)
@@ -655,14 +633,14 @@ fn lower_expr_match_felt(
     let semantic_db = ctx.db.upcast();
 
     // Lower both blocks.
-    let mut subscope_nz = scope.subscope_with_bound_refs();
+    let mut subscope_nz = scope.subscope_with_bound_refs(ctx);
     subscope_nz.add_input(
         ctx,
         VarRequest { ty: core_nonzero_ty(semantic_db, core_felt_ty(semantic_db)), location },
     );
 
     let sealed_blocks = vec![
-        lower_tail_expr(ctx, scope.subscope_with_bound_refs(), *block0)
+        lower_tail_expr(ctx, scope.subscope_with_bound_refs(ctx), *block0)
             .map_err(LoweringFlowError::Failed)?,
         lower_tail_expr(ctx, subscope_nz, *block_otherwise).map_err(LoweringFlowError::Failed)?,
     ];
@@ -827,12 +805,12 @@ fn lower_expr_error_propagate(
 
     let var = lowered_expr.var(ctx, scope)?;
     // Ok arm.
-    let mut subscope_ok = scope.subscope_with_bound_refs();
+    let mut subscope_ok = scope.subscope_with_bound_refs(ctx);
     let expr_var = subscope_ok.add_input(ctx, VarRequest { ty: ok_variant.ty, location });
     let sealed_block_ok = subscope_ok.goto_callsite(Some(expr_var));
 
     // Err arm.
-    let mut subscope_err = scope.subscope_with_bound_refs();
+    let mut subscope_err = scope.subscope_with_bound_refs(ctx);
     let err_value = subscope_err.add_input(ctx, VarRequest { ty: err_variant.ty, location });
     let err_res =
         generators::EnumConstruct { input: err_value, variant: func_err_variant.clone(), location }
