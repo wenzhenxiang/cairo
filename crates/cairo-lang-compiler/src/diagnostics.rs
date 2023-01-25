@@ -8,6 +8,10 @@ use cairo_lang_semantic::db::SemanticGroup;
 
 use crate::db::RootDatabase;
 
+#[cfg(test)]
+#[path = "diagnostics_test.rs"]
+mod test;
+
 /// Checks if there are diagnostics and reports them to the provided callback as strings.
 ///
 /// # Returns
@@ -22,12 +26,14 @@ pub fn check_diagnostics(
     let mut found_diagnostics = false;
     for crate_id in db.crates() {
         for module_id in &*db.crate_modules(crate_id) {
-            for file_id in db.module_files(*module_id).unwrap_or_default() {
+            for file_id in db.module_files(*module_id).ok().unwrap_or_else(|| {
+                vec![db.module_main_file(ModuleId::CrateRoot(crate_id)).unwrap()]
+            }) {
                 if db.file_content(file_id).is_none() {
                     if let ModuleId::CrateRoot(_) = *module_id {
                         match db.lookup_intern_file(file_id) {
                             FileLongId::OnDisk(path) => {
-                                on_diagnostic(format!("{} not found", path.display()))
+                                on_diagnostic(format!("{} not found\n", path.display()))
                             }
                             FileLongId::Virtual(_) => panic!("Missing virtual file."),
                         }
