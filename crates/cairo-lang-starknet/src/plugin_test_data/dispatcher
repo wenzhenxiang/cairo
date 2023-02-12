@@ -12,6 +12,8 @@ trait IContract {
 
     fn bad_sig(ref arg1: felt, ref arg2: felt) -> felt;
 
+    fn pass_calldata(calldata: Array::<felt>);
+
     #[event]
     fn my_event();
 }
@@ -25,6 +27,8 @@ trait IContract {
 
     fn bad_sig(ref arg1: felt, ref arg2: felt) -> felt;
 
+    fn pass_calldata(calldata: Array::<felt>);
+
     #[event]
     fn my_event();
 }
@@ -35,25 +39,36 @@ mod IContractDispatcher {
     use option::OptionTraitImpl;
 
     fn get_something(contract_address: ContractAddress, arg: felt, num: felt) -> felt {
-        let mut calldata = array_new();
-        serde::Serde::<felt>::serialize(ref calldata, arg);
-        serde::Serde::<felt>::serialize(ref calldata, num);
+        let mut __calldata = array_new();
+        serde::Serde::<felt>::serialize(ref __calldata, arg);
+        serde::Serde::<felt>::serialize(ref __calldata, num);
 
-        let mut ret_data = starknet::call_contract_syscall(
+        let mut __ret_data = starknet::call_contract_syscall(
             contract_address,
-            calldata,
+            __calldata,
         ).unwrap_syscall();
 
-        serde::Serde::<felt>::deserialize(ref ret_data).expect(
+        serde::Serde::<felt>::deserialize(ref __ret_data).expect(
             'Returned data too short')
     }
 
     fn empty(contract_address: ContractAddress, ) {
-        let mut calldata = array_new();
+        let mut __calldata = array_new();
 
-        let mut ret_data = starknet::call_contract_syscall(
+        let mut __ret_data = starknet::call_contract_syscall(
             contract_address,
-            calldata,
+            __calldata,
+        ).unwrap_syscall();
+
+    }
+
+    fn pass_calldata(contract_address: ContractAddress, calldata: Array::<felt>) {
+        let mut __calldata = array_new();
+        serde::Serde::<Array::<felt>>::serialize(ref __calldata, calldata);
+
+        let mut __ret_data = starknet::call_contract_syscall(
+            contract_address,
+            __calldata,
         ).unwrap_syscall();
 
     }

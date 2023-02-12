@@ -185,7 +185,7 @@ fn handle_trait(db: &dyn SyntaxGroup, trait_ast: ast::ItemTrait) -> PluginResult
                     let type_name = &param_type.as_syntax_node().get_text(db);
                     serialization_code.push(RewriteNode::interpolate_patched(
                         &formatdoc!(
-                            "        serde::Serde::<{type_name}>::serialize(ref calldata, \
+                            "        serde::Serde::<{type_name}>::serialize(ref __calldata, \
                              $arg_name$);\n"
                         ),
                         HashMap::from([(
@@ -208,7 +208,7 @@ fn handle_trait(db: &dyn SyntaxGroup, trait_ast: ast::ItemTrait) -> PluginResult
                         let type_name = ret_type_ast.as_syntax_node().get_text(db);
                         format!(
                             "
-        serde::Serde::<{type_name}>::deserialize(ref ret_data).expect(
+        serde::Serde::<{type_name}>::deserialize(ref __ret_data).expect(
             'Returned data too short')"
                         )
                     }
@@ -230,11 +230,11 @@ fn handle_trait(db: &dyn SyntaxGroup, trait_ast: ast::ItemTrait) -> PluginResult
 
                 functions.push(RewriteNode::interpolate_patched(
                     "$func_decl$ {
-        let mut calldata = array_new();
+        let mut __calldata = array_new();
 $serialization_code$
-        let mut ret_data = starknet::call_contract_syscall(
+        let mut __ret_data = starknet::call_contract_syscall(
             contract_address,
-            calldata,
+            __calldata,
         ).unwrap_syscall();
 $deserialization_code$
     }
