@@ -7,13 +7,13 @@ fn fib(n: usize) -> (Array::<felt>, felt, usize) {
     arr.append(1);
     arr.append(1);
     let mut arr = fib_inner(:n, :arr);
-    let len = arr.len();
+    let len = (@ arr).len();
     let last = arr.at(len - 1_usize);
     return (arr, last, len);
 }
 
 fn fib_inner(n: usize, mut arr: Array::<felt>) -> Array::<felt> {
-    let length = arr.len();
+    let length = (@ arr).len();
     if n <= length {
         return arr;
     }
