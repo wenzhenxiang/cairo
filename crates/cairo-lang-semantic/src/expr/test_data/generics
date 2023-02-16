@@ -7,6 +7,8 @@ test_function_diagnostics
 extern type A<S>;
 extern fn bar<T>(x:T) -> A::<T> nopanic;
 
+type A1<T> = @A::<T>;
+
 fn foo(a: A::<felt>) -> A::<A::<felt>> {
     let res = bar::<A::<felt>>(a);
     let bad : A::<A::<bool>> = res;
@@ -20,7 +22,7 @@ foo
 
 //! > expected_diagnostics
 error: Unexpected argument type. Expected: "test::A::<test::A::<core::bool>>", found: "test::A::<test::A::<core::felt>>".
- --> lib.cairo:6:32
+ --> lib.cairo:8:32
     let bad : A::<A::<bool>> = res;
                                ^*^
 

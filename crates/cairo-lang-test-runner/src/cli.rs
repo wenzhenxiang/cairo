@@ -187,9 +187,12 @@ fn run_tests(
             if test.ignored {
                 return Ok((name, TestStatus::Ignore));
             }
-            let result = runner
-                .run_function(name.as_str(), &[], test.available_gas)
-                .with_context(|| format!("Failed to run the function `{}`.", name.as_str()))?;
+                let result1 = runner
+        .run_function(name.as_str(), &[], test.available_gas);
+    if let Err(e) = &result1 {
+        panic!("{e:?}");
+    }
+ let result = result1.with_context(|| "Failed to run the function.")?;
             Ok((
                 name,
                 match (&result.value, test.expectation) {

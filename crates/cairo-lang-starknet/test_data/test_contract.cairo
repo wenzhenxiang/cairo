@@ -1,32 +1,54 @@
-#[abi]
-trait IAnotherContract {
-    fn foo(a: u128) -> u128;
-}
-
-
 #[contract]
-mod TestContract {
+mod SomeTest {
+    use option::OptionTrait;
+    use serde::Serde;
+
+    #[derive(Copy, Drop)]
+    struct Position {
+        x: felt,
+        y: felt,
+    }
+
+    impl StorageAccessPosition of starknet::StorageAccess::<Position> {
+        fn read(
+            address_domain: felt, base: starknet::StorageBaseAddress
+        ) -> starknet::SyscallResult::<Position> {
+            Result::Ok(
+                Position {
+                    x: starknet::StorageAccess::<felt>::read(address_domain, base)?,
+                    y: starknet::StorageAccess::<felt>::read(address_domain, base)?,
+                }
+            )
+        }
+        fn write(
+            address_domain: felt, base: starknet::StorageBaseAddress, value: Position
+        ) -> starknet::SyscallResult::<()> {
+            starknet::StorageAccess::<felt>::write(address_domain, base, value.x)?;
+            starknet::StorageAccess::<felt>::write(address_domain, base, value.y)
+        }
+    }
+
+    impl PositionSerde of Serde::<Position> {
+        fn serialize(ref serialized: Array::<felt>, input: Position) {
+            Serde::serialize(ref serialized, input.x);
+            Serde::serialize(ref serialized, input.y);
+        }
+        fn deserialize(ref serialized: Array::<felt>) -> Option::<Position> {
+            Option::Some(
+                Position {
+                    x: Serde::deserialize(ref serialized)?, y: Serde::deserialize(ref serialized)?, 
+                }
+            )
+        }
+    }
+
     struct Storage {
-        my_storage_var: felt
+        name: Position, 
     }
 
-    fn internal_func() -> felt {
-        1
-    }
 
-    #[external]
-    fn test(ref arg: felt, arg1: felt, arg2: felt) -> felt {
-        let mut x = my_storage_var::read();
-        x += 1;
-        my_storage_var::write(x);
-        x + internal_func()
-    }
-
-    #[external]
-    fn empty() {}
-
-    #[external]
-    fn call_foo(another_contract_address: ContractAddress, a: u128) -> u128 {
-        super::IAnotherContractDispatcher::foo(another_contract_address, a)
+    #[view]
+    fn get_name() -> Position {
+        name::read()
     }
 }

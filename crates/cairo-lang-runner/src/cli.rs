@@ -48,9 +48,12 @@ fn main() -> anyhow::Result<()> {
         args.available_gas.is_some(),
     )
     .with_context(|| "Failed setting up runner.")?;
-    let result = runner
-        .run_function("::main", &[], args.available_gas)
-        .with_context(|| "Failed to run the function.")?;
+    let result1 = runner
+        .run_function("::main", &[], args.available_gas);
+    if let Err(e) = &result1 {
+        panic!("{e:?}");
+    }
+    let result = result1.with_context(|| "Failed to run the function.")?;
     match result.value {
         cairo_lang_runner::RunResultValue::Success(values) => {
             println!("Run completed successfully, returning {values:?}")
