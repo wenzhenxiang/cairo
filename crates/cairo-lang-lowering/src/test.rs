@@ -35,6 +35,7 @@ cairo_lang_test_utils::test_file_test!(
 
 fn test_function_lowering(
     inputs: &OrderedHashMap<String, String>,
+    _: &mut (),
 ) -> OrderedHashMap<String, String> {
     let db = &mut LoweringDatabaseForTesting::default();
     db.set_semantic_plugins(get_default_plugins());

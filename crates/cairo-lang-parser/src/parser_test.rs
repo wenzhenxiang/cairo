@@ -250,11 +250,13 @@ pub fn fix_parser_tests() {
 ///   the irrelevant kinds.
 pub fn test_partial_parser_tree(
     inputs: &OrderedHashMap<String, String>,
+    _: &mut (),
 ) -> OrderedHashMap<String, String> {
     test_partial_parser_tree_inner(inputs, false)
 }
 pub fn test_partial_parser_tree_with_trivia(
     inputs: &OrderedHashMap<String, String>,
+    _: &mut (),
 ) -> OrderedHashMap<String, String> {
     test_partial_parser_tree_inner(inputs, true)
 }

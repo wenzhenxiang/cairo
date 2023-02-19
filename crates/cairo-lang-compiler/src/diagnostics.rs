@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use cairo_lang_defs::db::DefsGroup;
 use cairo_lang_defs::ids::ModuleId;
 use cairo_lang_filesystem::db::FilesGroup;
@@ -84,13 +86,23 @@ impl<'a> DiagnosticsReporter<'a> {
     /// Returns `true` if diagnostics were found.
     pub fn check(&mut self, db: &mut RootDatabase) -> bool {
         let mut found_diagnostics = false;
+        let mut start = Instant::now();
+        let mut i = 1;
+        println!("check{i}: {:?}", start.elapsed());
+        i += 1;
         for crate_id in db.crates() {
+            println!("checka{i}: {:?}", start.elapsed());
+            i += 1;
+            start = Instant::now();
+            println!("{}", db.lookup_intern_crate(crate_id).0);
             let Ok(module_file) = db.module_main_file(ModuleId::CrateRoot(crate_id)) else {
                 found_diagnostics = true;
                 self.callback.on_diagnostic("Failed to get main module file".to_string());
                 continue;
             };
-
+            println!("checkb{i}: {:?}", start.elapsed());
+            i += 1;
+            start = Instant::now();
             if db.file_content(module_file).is_none() {
                 match db.lookup_intern_file(module_file) {
                     FileLongId::OnDisk(path) => {
@@ -100,7 +112,9 @@ impl<'a> DiagnosticsReporter<'a> {
                 }
                 found_diagnostics = true;
             }
-
+            println!("checkc{i}: {:?}", start.elapsed());
+            i += 1;
+            start = Instant::now();
             for module_id in &*db.crate_modules(crate_id) {
                 for file_id in db.module_files(*module_id).unwrap_or_default() {
                     let diag = db.file_syntax_diagnostics(file_id);
@@ -124,14 +138,22 @@ impl<'a> DiagnosticsReporter<'a> {
                     }
                 }
             }
+            println!("checkd{i}: {:?}", start.elapsed());
+            i += 1;
+            start = Instant::now();
         }
+        println!("check{i}: {:?}", start.elapsed());
         found_diagnostics
     }
 
     /// Checks if there are diagnostics and reports them to the provided callback as strings.
     /// Returns `Err` if diagnostics were found.
     pub fn ensure(&mut self, db: &mut RootDatabase) -> Result<(), DiagnosticsError> {
-        if self.check(db) { Err(DiagnosticsError) } else { Ok(()) }
+        if self.check(db) {
+            Err(DiagnosticsError)
+        } else {
+            Ok(())
+        }
     }
 }
 

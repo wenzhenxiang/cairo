@@ -23,7 +23,10 @@ fn get_example_program(name: &str) -> Program {
     cairo_lang_sierra::ProgramParser::new().parse(&fs::read_to_string(path).unwrap()).unwrap()
 }
 
-fn test_solve_gas(inputs: &OrderedHashMap<String, String>) -> OrderedHashMap<String, String> {
+fn test_solve_gas(
+    inputs: &OrderedHashMap<String, String>,
+    _: &mut (),
+) -> OrderedHashMap<String, String> {
     let path = &inputs["test_file_name"];
     let program = get_example_program(path);
 

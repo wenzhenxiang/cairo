@@ -21,7 +21,10 @@ cairo_lang_test_utils::test_file_test!(
     block_generator_test
 );
 
-fn block_generator_test(inputs: &OrderedHashMap<String, String>) -> OrderedHashMap<String, String> {
+fn block_generator_test(
+    inputs: &OrderedHashMap<String, String>,
+    _: &mut (),
+) -> OrderedHashMap<String, String> {
     let db = &mut SierraGenDatabaseForTesting::default();
     // Parse code and create semantic model.
     let (test_function, semantic_diagnostics) = setup_test_function(

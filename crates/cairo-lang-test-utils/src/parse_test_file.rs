@@ -197,6 +197,24 @@ macro_rules! test_file_test {
                     path.as_path(),
                     stringify!($test_func),
                     $test_func,
+                    || (),
+                )
+            }
+        )*
+        }
+    };
+    ($suite:ident, $base_dir:expr, { $($test_name:ident : $test_file:expr),* $(,)? }, $test_func:ident, $db_gen:ident ) => {
+        mod $suite {
+            use super::*;
+        $(
+            #[test_log::test]
+            fn $test_name() -> Result<(), std::io::Error> {
+                let path: std::path::PathBuf = [env!("CARGO_MANIFEST_DIR"), $base_dir, $test_file].iter().collect();
+                cairo_lang_test_utils::parse_test_file::run_test_file(
+                    path.as_path(),
+                    stringify!($test_func),
+                    $test_func,
+                    $db_gen,
                 )
             }
         )*
@@ -206,16 +224,18 @@ macro_rules! test_file_test {
 
 /// Runs a test based on file at `path` named `test_func_name` by running `test_func` on it.
 /// May fix the test file if `CAIRO_FIX_TESTS` is set to true.
-pub fn run_test_file(
+pub fn run_test_file<T>(
     path: &Path,
     test_func_name: &str,
-    test_func: fn(&OrderedHashMap<String, String>) -> OrderedHashMap<String, String>,
+    test_func: fn(&OrderedHashMap<String, String>, &mut T) -> OrderedHashMap<String, String>,
+    gen: fn() -> T,
 ) -> Result<(), std::io::Error> {
     let is_fix_mode = std::env::var("CAIRO_FIX_TESTS").is_ok();
     let tests = parse_test_file(path)?;
     let mut new_tests = OrderedHashMap::<String, Test>::default();
+    let mut db = gen();
     for (test_name, test) in tests {
-        let outputs = test_func(&test.attributes);
+        let outputs = test_func(&test.attributes, &mut db);
         let line_num = test.line_num;
         let full_filename = std::fs::canonicalize(path)?;
         let full_filename_str = full_filename.to_str().unwrap();

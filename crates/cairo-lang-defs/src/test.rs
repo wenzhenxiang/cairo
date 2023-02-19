@@ -77,7 +77,10 @@ cairo_lang_test_utils::test_file_test!(
     },
     test_generic_item_id
 );
-fn test_generic_item_id(inputs: &OrderedHashMap<String, String>) -> OrderedHashMap<String, String> {
+fn test_generic_item_id(
+    inputs: &OrderedHashMap<String, String>,
+    _: &mut (),
+) -> OrderedHashMap<String, String> {
     let mut db_val = DatabaseForTesting::default();
     let module_id = setup_test_module(&mut db_val, inputs["module_code"].as_str());
 

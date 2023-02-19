@@ -12,6 +12,7 @@ use crate::plugin::StarkNetPlugin;
 
 pub fn test_expand_contract(
     inputs: &OrderedHashMap<String, String>,
+    _: &mut (),
 ) -> OrderedHashMap<String, String> {
     let db = &mut RootDatabase::builder().detect_corelib().with_starknet().build().unwrap();
 

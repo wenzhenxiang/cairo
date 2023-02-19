@@ -6,6 +6,7 @@ use cairo_lang_sierra_generator::replace_ids::replace_sierra_ids_in_program;
 use cairo_lang_sierra_to_casm::test_utils::build_metadata;
 use cairo_lang_utils::ordered_hash_map::OrderedHashMap;
 use itertools::Itertools;
+use rstest::fixture;
 
 cairo_lang_test_utils::test_file_test!(
     libfunc_e2e,
@@ -30,7 +31,8 @@ cairo_lang_test_utils::test_file_test!(
         enum_: "enum",
         span: "span",
     },
-    run_small_e2e_test
+    run_small_e2e_test,
+    compiled_corelib
 );
 
 cairo_lang_test_utils::test_file_test!(
@@ -42,18 +44,25 @@ cairo_lang_test_utils::test_file_test!(
         emit_event: "emit_event",
         getters: "getters",
     },
-    run_small_e2e_test
+    run_small_e2e_test,
+    compiled_corelib
 );
 
-fn run_small_e2e_test(inputs: &OrderedHashMap<String, String>) -> OrderedHashMap<String, String> {
-    let mut db = RootDatabase::builder().detect_corelib().build().unwrap();
+fn compiled_corelib() -> RootDatabase {
+    RootDatabase::builder().detect_corelib().build().unwrap()
+}
+fn run_small_e2e_test(
+    inputs: &OrderedHashMap<String, String>,
+    db: &mut RootDatabase,
+) -> OrderedHashMap<String, String> {
+    // let mut db = RootDatabase::builder().detect_corelib().build().unwrap();
     // Parse code and create semantic model.
-    let test_module = setup_test_module(&mut db, inputs["cairo"].as_str()).unwrap();
-    DiagnosticsReporter::stderr().ensure(&mut db).unwrap();
+    let test_module = setup_test_module(db, inputs["cairo"].as_str()).unwrap();
+    DiagnosticsReporter::stderr().ensure(db).unwrap();
 
     // Compile to Sierra.
     let sierra_program = db.get_sierra_program(vec![test_module.crate_id]).unwrap();
-    let sierra_program = replace_sierra_ids_in_program(&db, &sierra_program);
+    let sierra_program = replace_sierra_ids_in_program(db, &sierra_program);
     let sierra_program_str = sierra_program.to_string();
 
     // Compute the metadata.

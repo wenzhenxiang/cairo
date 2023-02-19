@@ -13,7 +13,10 @@ pub fn read_file(filename: &str) -> String {
         .unwrap_or_else(|_| panic!("Something went wrong reading file {filename}"))
 }
 
-pub fn get_diagnostics(inputs: &OrderedHashMap<String, String>) -> OrderedHashMap<String, String> {
+pub fn get_diagnostics(
+    inputs: &OrderedHashMap<String, String>,
+    _: &mut (),
+) -> OrderedHashMap<String, String> {
     let db = &SimpleParserDatabase::default();
     let code = &inputs["cairo_code"];
 

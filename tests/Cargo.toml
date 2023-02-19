@@ -33,6 +33,7 @@ cairo-lang-utils = { path = "../crates/cairo-lang-utils", version = "1.0.0-alpha
 salsa.workspace = true
 test-case.workspace = true
 test-log.workspace = true
+rstest.workspace = true
 
 [[test]]
 name = "examples_test"

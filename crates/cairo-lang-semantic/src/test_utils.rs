@@ -108,6 +108,7 @@ pub fn setup_test_module(
     db: &mut (dyn SemanticGroup + 'static),
     content: &str,
 ) -> WithStringDiagnostics<TestModule> {
+    println!("{content}");
     let crate_id = setup_test_crate(db, content);
     let module_id = ModuleId::CrateRoot(crate_id);
     let file_id = db.module_main_file(module_id).unwrap();
@@ -231,6 +232,7 @@ pub fn setup_test_block(
 
 pub fn test_expr_diagnostics(
     inputs: &OrderedHashMap<String, String>,
+    _: &mut (),
 ) -> OrderedHashMap<String, String> {
     let db = &mut SemanticDatabaseForTesting::default();
     OrderedHashMap::from([(
@@ -247,6 +249,7 @@ pub fn test_expr_diagnostics(
 
 pub fn test_function_diagnostics(
     inputs: &OrderedHashMap<String, String>,
+    _: &mut (),
 ) -> OrderedHashMap<String, String> {
     let db = &mut SemanticDatabaseForTesting::default();
     OrderedHashMap::from([(

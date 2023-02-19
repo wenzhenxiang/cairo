@@ -21,6 +21,7 @@ cairo_lang_test_utils::test_file_test!(
 
 pub fn test_expand_plugin(
     inputs: &OrderedHashMap<String, String>,
+    _: &mut (),
 ) -> OrderedHashMap<String, String> {
     let db = &mut SimpleParserDatabase::default();
     let cairo_code = &inputs["cairo_code"];

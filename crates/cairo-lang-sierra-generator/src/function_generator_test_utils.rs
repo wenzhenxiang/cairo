@@ -9,6 +9,7 @@ use crate::test_utils::SierraGenDatabaseForTesting;
 /// Compiles a single function to Sierra and checks the generated code.
 pub fn test_function_generator(
     inputs: &OrderedHashMap<String, String>,
+    _: &mut (),
 ) -> OrderedHashMap<String, String> {
     let db = &mut SierraGenDatabaseForTesting::default();
     // Parse code and create semantic model.
