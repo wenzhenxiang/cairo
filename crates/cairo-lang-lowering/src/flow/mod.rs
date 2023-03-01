@@ -29,10 +29,7 @@ pub fn add_fallthroughs(flat_lowered: &mut FlatLowered) {
                     *has_fallthorugh = true;
                 }
             }
-            FlatBlockEnd::Match { .. }
-            | FlatBlockEnd::Return(_)
-            | FlatBlockEnd::Unreachable
-            | FlatBlockEnd::NotSet => {}
+            FlatBlockEnd::Match { .. } | FlatBlockEnd::Return(_) | FlatBlockEnd::NotSet => {}
         };
     }
 }
