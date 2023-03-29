@@ -13,6 +13,7 @@ pub mod ids;
 pub mod implicits;
 pub mod inline;
 pub mod lower;
+pub mod mandatory_calls;
 pub mod objects;
 pub mod optimizations;
 pub mod panic;

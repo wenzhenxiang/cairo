@@ -164,16 +164,35 @@ impl FunctionLongId {
             FunctionLongId::Generated(generated) => generated.body(db).signature(db),
         }
     }
+    // TODO(yg): rename?
+    pub fn is_semantic_and_eq(
+        &self,
+        db: &dyn LoweringGroup,
+        function_id: semantic::items::functions::FunctionId,
+    ) -> bool {
+        match self {
+            FunctionLongId::Semantic(id) => *id == function_id,
+            FunctionLongId::Generated(_) => false,
+        }
+    }
 }
 impl FunctionId {
     pub fn body(&self, db: &dyn LoweringGroup) -> Maybe<Option<ConcreteFunctionWithBodyId>> {
-        db.lookup_intern_lowering_function(*self).body(db)
+        self.lookup(db).body(db)
     }
     pub fn signature(&self, db: &dyn LoweringGroup) -> Maybe<semantic::Signature> {
-        db.lookup_intern_lowering_function(*self).signature(db)
+        self.lookup(db).signature(db)
     }
     pub fn lookup(&self, db: &dyn LoweringGroup) -> FunctionLongId {
         db.lookup_intern_lowering_function(*self)
+    }
+    // TODO(yg): rename?
+    pub fn is_semantic_and_eq(
+        &self,
+        db: &dyn LoweringGroup,
+        function_id: semantic::items::functions::FunctionId,
+    ) -> bool {
+        self.lookup(db).is_semantic_and_eq(db, function_id)
     }
 }
 pub trait SemanticFunctionIdEx {
